@@ -38,8 +38,11 @@ function getRequestyConfig() {
     throw new Error(`${MODELS_JSON_PATH} does not define providers.${PROVIDER}`);
   }
 
-  if (typeof provider.apiKey !== "string" || provider.apiKey.length === 0) {
-    throw new Error(`providers.${PROVIDER}.apiKey must be set in ${MODELS_JSON_PATH}`);
+  const apiKey = process.env.REQUESTY_API_KEY ||
+    (typeof provider.apiKey === "string" && provider.apiKey.length > 0 ? provider.apiKey : undefined);
+
+  if (!apiKey) {
+    throw new Error(`providers.${PROVIDER}.apiKey must be set in ${MODELS_JSON_PATH} or via REQUESTY_API_KEY env var`);
   }
 
   // Precedence: REQUESTY_PROVIDER_NAME env var > models.json name field > "Requesty"
@@ -57,7 +60,7 @@ function getRequestyConfig() {
       ...provider,
       name,
       baseUrl,
-      apiKey: provider.apiKey,
+      apiKey,
     },
   };
 }
