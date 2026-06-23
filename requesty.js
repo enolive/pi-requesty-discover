@@ -229,14 +229,19 @@ export default async function (pi) {
       try {
         const { data, provider } = getRequestyConfig();
         const models = await discoverModels(provider);
-        updateModelsJson(data, models);
 
         ctx.ui.setStatus("requesty-models-sync", `Checking ${models.length} model(s)...`);
         const healthResults = await checkModels(provider, models);
-        const summary = formatHealthSummary(healthResults);
         const failed = healthResults.filter((r) => !r.ok);
+        const passing = models.filter((m) => healthResults.find((r) => r.modelId === m.id)?.ok);
+        const summary = formatHealthSummary(healthResults);
 
-        const message = `Discovered ${models.length} Requesty model(s). ${summary} Run /reload to use models.json changes.`;
+        if (passing.length > 0) {
+          updateModelsJson(data, passing);
+        }
+
+        const writeNote = passing.length > 0 ? " Run /reload to use models.json changes." : " models.json was not updated.";
+        const message = `Discovered ${models.length} Requesty model(s). ${summary}${writeNote}`;
 
         if (failed.length === 0) {
           ctx.ui.notify(message, "success");
