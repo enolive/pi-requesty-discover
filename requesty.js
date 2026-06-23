@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 
 const MODELS_JSON_PATH = path.join(os.homedir(), ".pi", "agent", "models.json");
-const PROVIDER = "requesty";
+const PROVIDER = "requesty-export";
 const DEFAULT_BASE_URL = "https://router.requesty.ai/v1";
 const DEFAULT_NAME = "Requesty";
 const DEFAULT_CONTEXT_WINDOW = 128000;
