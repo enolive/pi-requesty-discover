@@ -3,9 +3,9 @@ import os from "node:os";
 import path from "node:path";
 
 const MODELS_JSON_PATH = path.join(os.homedir(), ".pi", "agent", "models.json");
-const PROVIDER = "requesty-export";
+const PROVIDER = process.env.REQUESTY_PROVIDER_ID ?? "requesty-export";
 const DEFAULT_BASE_URL = "https://router.requesty.ai/v1";
-const DEFAULT_NAME = "Requesty";
+const DEFAULT_NAME = process.env.REQUESTY_PROVIDER_NAME ?? "Requesty";
 const DEFAULT_CONTEXT_WINDOW = 128000;
 const DEFAULT_MAX_TOKENS = 4096;
 
@@ -38,7 +38,10 @@ function getRequestyConfig() {
     throw new Error(`providers.${PROVIDER}.apiKey must be set in ${MODELS_JSON_PATH}`);
   }
 
-  const name = typeof provider.name === "string" && provider.name.length > 0 ? provider.name : DEFAULT_NAME;
+  // Precedence: REQUESTY_PROVIDER_NAME env var > models.json name field > "Requesty"
+  const name =
+    process.env.REQUESTY_PROVIDER_NAME ??
+    (typeof provider.name === "string" && provider.name.length > 0 ? provider.name : DEFAULT_NAME);
 
   const baseUrl = normalizeBaseUrl(
     typeof provider.baseUrl === "string" && provider.baseUrl.length > 0 ? provider.baseUrl : DEFAULT_BASE_URL,
@@ -48,8 +51,8 @@ function getRequestyConfig() {
     data,
     provider: {
       ...provider,
-      name: name,
-      baseUrl: baseUrl,
+      name,
+      baseUrl,
       apiKey: provider.apiKey,
     },
   };
