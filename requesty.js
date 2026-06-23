@@ -9,6 +9,10 @@ const DEFAULT_NAME = process.env.REQUESTY_PROVIDER_NAME ?? "Requesty";
 const DEFAULT_CONTEXT_WINDOW = 128000;
 const DEFAULT_MAX_TOKENS = 4096;
 
+const HEALTH_CHECK_TIMEOUT_MS = 15_000;
+const HEALTH_CHECK_CONCURRENCY = 10;
+const HEALTH_CHECK_STARTUP_MAX = 20;
+
 function normalizeBaseUrl(baseUrl) {
   return baseUrl.replace(/\/+$/, "");
 }
@@ -117,9 +121,105 @@ function updateModelsJson(data, models) {
   writeModelsJson(data);
 }
 
+/**
+ * Fire a minimal completion request to verify a model is reachable and responding.
+ * Returns { ok: true, latencyMs } or { ok: false, latencyMs, error }.
+ */
+async function checkModel(provider, modelId) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), HEALTH_CHECK_TIMEOUT_MS);
+  const start = Date.now();
+
+  try {
+    const response = await fetch(`${provider.baseUrl}/chat/completions`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${provider.apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: modelId,
+        messages: [{ role: "user", content: "Say OK" }],
+        max_tokens: 16,
+      }),
+      signal: controller.signal,
+    });
+
+    const latencyMs = Date.now() - start;
+
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      return { ok: false, latencyMs, error: `HTTP ${response.status} ${response.statusText}${text ? `: ${text.slice(0, 120)}` : ""}` };
+    }
+
+    const payload = await response.json();
+    if (!payload?.choices?.length) {
+      return { ok: false, latencyMs, error: "Empty choices in response" };
+    }
+
+    return { ok: true, latencyMs };
+  } catch (err) {
+    const latencyMs = Date.now() - start;
+    const isTimeout = err instanceof Error && err.name === "AbortError";
+    return { ok: false, latencyMs, error: isTimeout ? `Timed out after ${HEALTH_CHECK_TIMEOUT_MS / 1000}s` : String(err) };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Run checkModel over a list of models with a concurrency cap.
+ * Returns an array of { modelId, ok, latencyMs, error? } in completion order.
+ */
+async function checkModels(provider, models) {
+  const results = [];
+  const queue = [...models];
+  let active = 0;
+
+  await new Promise((resolve) => {
+    function next() {
+      while (active < HEALTH_CHECK_CONCURRENCY && queue.length > 0) {
+        const model = queue.shift();
+        active++;
+        checkModel(provider, model.id).then((result) => {
+          results.push({ modelId: model.id, ...result });
+          active--;
+          if (queue.length === 0 && active === 0) resolve();
+          else next();
+        });
+      }
+      if (queue.length === 0 && active === 0) resolve();
+    }
+    next();
+  });
+
+  return results;
+}
+
+/**
+ * Format health check results into a human-readable summary string.
+ * e.g. "Health check: 40 OK, 2 failed (gpt-foo, bar-turbo)."
+ */
+function formatHealthSummary(results) {
+  const passed = results.filter((r) => r.ok);
+  const failed = results.filter((r) => !r.ok);
+
+  if (failed.length === 0) {
+    return `Health check: all ${passed.length} OK.`;
+  }
+
+  const failedIds = failed.map((r) => r.modelId);
+  const failedLabel =
+    failedIds.length <= 3
+      ? `${failed.length} failed (${failedIds.join(", ")})`
+      : `${failed.length} failed`;
+
+  return `Health check: ${passed.length} OK, ${failedLabel}.`;
+}
+
 export default async function (pi) {
   pi.registerCommand("requesty-models-sync", {
-    description: "Dynamically discover Requesty models and update the local models.json.",
+    description: "Dynamically discover Requesty models, run health checks, and update the local models.json.",
     async handler(_args, ctx) {
       ctx.ui.setStatus("requesty-models-sync", "Discovering Requesty models...");
 
@@ -127,7 +227,21 @@ export default async function (pi) {
         const { data, provider } = getRequestyConfig();
         const models = await discoverModels(provider);
         updateModelsJson(data, models);
-        ctx.ui.notify(`Discovered ${models.length} Requesty model(s). Run /reload to use models.json changes.`, "success");
+
+        ctx.ui.setStatus("requesty-models-sync", `Checking ${models.length} model(s)...`);
+        const healthResults = await checkModels(provider, models);
+        const summary = formatHealthSummary(healthResults);
+        const failed = healthResults.filter((r) => !r.ok);
+
+        const message = `Discovered ${models.length} Requesty model(s). ${summary} Run /reload to use models.json changes.`;
+
+        if (failed.length === 0) {
+          ctx.ui.notify(message, "success");
+        } else if (failed.length < models.length) {
+          ctx.ui.notify(message, "warning");
+        } else {
+          ctx.ui.notify(message, "error");
+        }
       } catch (error) {
         ctx.ui.notify(`Discovery failed: ${error instanceof Error ? error.message : String(error)}`, "error");
       } finally {
@@ -144,6 +258,18 @@ export default async function (pi) {
       pi.registerProvider(PROVIDER, {
         ...provider,
         models,
+      });
+
+      // Health-check a capped subset at startup — non-blocking, failures are warnings only.
+      const sample = models.slice(0, HEALTH_CHECK_STARTUP_MAX);
+      checkModels(provider, sample).then((healthResults) => {
+        const failed = healthResults.filter((r) => !r.ok);
+        for (const f of failed) {
+          console.warn(`[pi-requesty] health check failed for ${f.modelId}: ${f.error}`);
+        }
+        if (failed.length > 0) {
+          console.warn(`[pi-requesty] ${failed.length}/${sample.length} sampled model(s) failed health checks.`);
+        }
       });
     }
   } catch (error) {
