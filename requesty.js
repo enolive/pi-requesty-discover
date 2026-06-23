@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { execSync } from "node:child_process";
 
 const MODELS_JSON_PATH = path.join(os.homedir(), ".pi", "agent", "models.json");
 const PROVIDER = process.env.REQUESTY_PROVIDER_ID ?? "requesty-export";
@@ -8,6 +9,61 @@ const DEFAULT_BASE_URL = "https://router.requesty.ai/v1";
 const DEFAULT_NAME = process.env.REQUESTY_PROVIDER_NAME ?? "Requesty";
 const DEFAULT_CONTEXT_WINDOW = 128000;
 const DEFAULT_MAX_TOKENS = 4096;
+
+/**
+ * Resolve a config value using the same rules as pi's internal resolveConfigValue:
+ *   !command   → execute shell command, return trimmed stdout
+ *   $ENV_VAR   → interpolate environment variable
+ *   ${ENV_VAR} → interpolate environment variable
+ *   $$         → literal "$"
+ *   $!         → literal "!"
+ *   otherwise  → literal string
+ * Returns undefined if any referenced env var is missing or a command fails.
+ */
+function resolveConfigValue(config) {
+  if (typeof config !== "string" || config.length === 0) return undefined;
+
+  if (config.startsWith("!")) {
+    const command = config.slice(1);
+    try {
+      return execSync(command, { encoding: "utf-8", timeout: 10_000, stdio: ["ignore", "pipe", "ignore"] }).trim() || undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  // Template interpolation
+  let result = "";
+  let i = 0;
+  while (i < config.length) {
+    const dollarIdx = config.indexOf("$", i);
+    if (dollarIdx < 0) { result += config.slice(i); break; }
+    result += config.slice(i, dollarIdx);
+    const next = config[dollarIdx + 1];
+    if (next === "$" || next === "!") { result += next; i = dollarIdx + 2; continue; }
+    if (next === "{") {
+      const end = config.indexOf("}", dollarIdx + 2);
+      if (end < 0) { result += "$"; i = dollarIdx + 1; continue; }
+      const name = config.slice(dollarIdx + 2, end);
+      const val = process.env[name];
+      if (val === undefined) return undefined;
+      result += val;
+      i = end + 1;
+      continue;
+    }
+    const match = config.slice(dollarIdx + 1).match(/^[A-Za-z_][A-Za-z0-9_]*/);
+    if (match) {
+      const val = process.env[match[0]];
+      if (val === undefined) return undefined;
+      result += val;
+      i = dollarIdx + 1 + match[0].length;
+      continue;
+    }
+    result += "$";
+    i = dollarIdx + 1;
+  }
+  return result || undefined;
+}
 
 const HEALTH_CHECK_TIMEOUT_MS = 15_000;
 const HEALTH_CHECK_CONCURRENCY = 10;
@@ -42,6 +98,11 @@ function getRequestyConfig() {
     throw new Error(`providers.${PROVIDER}.apiKey must be set in ${MODELS_JSON_PATH}`);
   }
 
+  const apiKey = resolveConfigValue(provider.apiKey);
+  if (!apiKey) {
+    throw new Error(`providers.${PROVIDER}.apiKey could not be resolved (value: ${provider.apiKey})`);
+  }
+
   // Precedence: REQUESTY_PROVIDER_NAME env var > models.json name field > "Requesty"
   const name =
     process.env.REQUESTY_PROVIDER_NAME ??
@@ -57,7 +118,7 @@ function getRequestyConfig() {
       ...provider,
       name,
       baseUrl,
-      apiKey: provider.apiKey,
+      apiKey,
     },
   };
 }
