@@ -121,10 +121,6 @@ function updateModelsJson(data, models) {
   writeModelsJson(data);
 }
 
-/**
- * Fire a minimal completion request to verify a model is reachable and responding.
- * Returns { ok: true, latencyMs } or { ok: false, latencyMs, error }.
- */
 async function checkModel(provider, modelId) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), HEALTH_CHECK_TIMEOUT_MS);
@@ -167,10 +163,6 @@ async function checkModel(provider, modelId) {
   }
 }
 
-/**
- * Run checkModel over a list of models with a concurrency cap.
- * Returns an array of { modelId, ok, latencyMs, error? } in completion order.
- */
 async function checkModels(provider, models) {
   const results = [];
   const queue = [...models];
@@ -196,10 +188,6 @@ async function checkModels(provider, models) {
   return results;
 }
 
-/**
- * Format health check results into a human-readable summary string.
- * e.g. "Health check: 40 OK, 2 failed (gpt-foo, bar-turbo)."
- */
 function formatHealthSummary(results) {
   const passed = results.filter((r) => r.ok);
   const failed = results.filter((r) => !r.ok);
@@ -254,32 +242,4 @@ export default async function (pi) {
       }
     },
   });
-
-  try {
-    const { provider } = getRequestyConfig();
-    const models = await discoverModels(provider);
-
-    if (models.length > 0) {
-      pi.registerProvider(PROVIDER, {
-        ...provider,
-        models,
-      });
-
-      // Health-check a capped subset at startup — non-blocking, failures are warnings only.
-      const sample = models.slice(0, HEALTH_CHECK_STARTUP_MAX);
-      checkModels(provider, sample).then((healthResults) => {
-        const failed = healthResults.filter((r) => !r.ok);
-        for (const f of failed) {
-          console.warn(`[pi-requesty] health check failed for ${f.modelId}: ${f.error}`);
-        }
-        if (failed.length > 0) {
-          console.warn(`[pi-requesty] ${failed.length}/${sample.length} sampled model(s) failed health checks.`);
-        }
-      });
-    }
-  } catch (error) {
-    console.warn(
-      `[pi-requesty-model-discovery] startup discovery failed: ${error instanceof Error ? error.message : String(error)}`,
-    );
-  }
 }
