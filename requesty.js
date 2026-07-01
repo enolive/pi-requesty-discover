@@ -196,13 +196,9 @@ function formatHealthSummary(results) {
     return `Health check: all ${passed.length} OK.`;
   }
 
-  const failedIds = failed.map((r) => r.modelId);
-  const failedLabel =
-    failedIds.length <= 3
-      ? `${failed.length} failed (${failedIds.join(", ")})`
-      : `${failed.length} failed`;
+  const failedModels = failed.map((r) => `- ${r.modelId}`).join("\n");
 
-  return `Health check: ${passed.length} OK, ${failedLabel}.`;
+  return `Health check: ${passed.length} OK, ${failed.length} failed:\n${failedModels}`;
 }
 
 export default async function (pi) {
@@ -225,8 +221,8 @@ export default async function (pi) {
           updateModelsJson(data, passing);
         }
 
-        const writeNote = passing.length > 0 ? " Run /reload to use models.json changes." : " models.json was not updated.";
-        const message = `Discovered ${models.length} Requesty model(s). ${summary}${writeNote}`;
+        const writeNote = passing.length > 0 ? "Run /reload to use models.json changes." : "models.json was not updated.";
+        const message = `Discovered ${models.length} Requesty model(s).\n${summary}\n${writeNote}`;
 
         if (failed.length === 0) {
           ctx.ui.notify(message, "success");
