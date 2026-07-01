@@ -26,7 +26,7 @@ pi -e ./pi-requesty
 
 ## Configuration
 
-The extension only reads the `requesty` provider from `~/.pi/agent/models.json`.
+The extension only reads the `requesty` provider from `~/.pi/agent/models.json`. You can override this by setting up the `REQUESTY_PROVIDER_ID` variable.
 
 Example:
 
@@ -45,6 +45,14 @@ Example:
 ```
 
 On startup, the extension fetches `<baseUrl>/models` using `apiKey` as the bearer token and registers discovered models with pi.
+
+
+### Environment variables
+
+| name | meaning |
+| ---- | ------- |
+| REQUESTY_API_KEY | define an api key for accessing requesty. This will override the configfured api key in the providers configuration which won't work if you use environment variables or shell integration here |
+| REQUESTY_PROVIDER_ID | the id of the provider. Defaults to `requesty` which might be bad as pi already populates this with all default models | 
 
 ## Command
 
