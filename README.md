@@ -26,7 +26,7 @@ pi -e ./pi-requesty
 
 ## Configuration
 
-The extension only reads the `requesty` provider from `~/.pi/agent/models.json`. You can override this by setting up the `REQUESTY_PROVIDER_ID` variable.
+The extension only reads the `requesty` provider from `~/.pi/agent/models.json`. You can override its name by setting up the `REQUESTY_PROVIDER_ID` variable.
 
 Example:
 
