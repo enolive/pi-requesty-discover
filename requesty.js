@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import process from "node:process";
 
 const AGENT_DIR = path.join(os.homedir(), ".pi", "agent");
 const MODELS_JSON_PATH = path.join(AGENT_DIR, "models.json");
@@ -13,7 +14,6 @@ const DEFAULT_MAX_TOKENS = 4096;
 
 const HEALTH_CHECK_TIMEOUT_MS = 15_000;
 const HEALTH_CHECK_CONCURRENCY = 10;
-const HEALTH_CHECK_STARTUP_MAX = 20;
 
 function normalizeBaseUrl(baseUrl) {
   return baseUrl.replace(/\/+$/, "");
@@ -189,8 +189,7 @@ async function checkModel(provider, model) {
         },
       },
     ],
-    reasoning_effort: "low",
-    max_tokens: 16,
+    reasoning_effort: "low"
   });
 
   if (!reasoningResult.ok) {
