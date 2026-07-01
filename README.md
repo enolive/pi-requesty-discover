@@ -49,10 +49,11 @@ On startup, the extension fetches `<baseUrl>/models` using `apiKey` as the beare
 
 ### Environment variables
 
-| name | meaning |
-| ---- | ------- |
-| REQUESTY_API_KEY | define an api key for accessing requesty. This will override the configfured api key in the providers configuration which won't work if you use environment variables or shell integration here |
-| REQUESTY_PROVIDER_ID | the id of the provider. Defaults to `requesty` which might be bad as pi already populates this with all default models | 
+| name |  type   | default | meaning |
+|------|---------|---------|---------|
+| REQUESTY_API_KEY | `string` |  | define an api key for accessing requesty. This will override the configfured api key in the providers configuration which won't work if you use environment variables or shell integration here |
+| REQUESTY_PROVIDER_ID | `string` | `requesty` | the id of the provider. | 
+| REQUESTY_HEALTH_CHECK_MODE | `off`<br/> `basic` <br/> `full` | `full` | the health check mode. | 
 
 ## Command
 

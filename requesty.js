@@ -11,6 +11,7 @@ const DEFAULT_BASE_URL = "https://router.requesty.ai/v1";
 const DEFAULT_NAME = "Requesty";
 const DEFAULT_CONTEXT_WINDOW = 128000;
 const DEFAULT_MAX_TOKENS = 4096;
+const HEALTH_CHECK_MODE = process.env.REQUESTY_HEALTH_CHECK_MODE ?? "full";
 
 const HEALTH_CHECK_TIMEOUT_MS = 15_000;
 const HEALTH_CHECK_CONCURRENCY = 10;
@@ -123,6 +124,31 @@ function updateModelsJson(data, models) {
   writeModelsJson(data);
 }
 
+async function checkModels(provider, models, checkReasoning) {
+  const results = [];
+  const queue = [...models];
+  let active = 0;
+
+  await new Promise((resolve) => {
+    function next() {
+      while (active < HEALTH_CHECK_CONCURRENCY && queue.length > 0) {
+        const model = queue.shift();
+        active++;
+        checkModel(provider, model, checkReasoning).then((result) => {
+          results.push({ modelId: model.id, ...result });
+          active--;
+          if (queue.length === 0 && active === 0) resolve();
+          else next();
+        });
+      }
+      if (queue.length === 0 && active === 0) resolve();
+    }
+    next();
+  });
+
+  return results;
+}
+
 async function postChatCompletion(provider, body) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), HEALTH_CHECK_TIMEOUT_MS);
@@ -161,14 +187,14 @@ async function postChatCompletion(provider, body) {
   }
 }
 
-async function checkModel(provider, model) {
+async function checkModel(provider, model, checkReasoning) {
   const basicResult = await postChatCompletion(provider, {
     model: model.id,
     messages: [{ role: "user", content: "Say OK" }],
     max_tokens: 16,
   });
 
-  if (!basicResult.ok || !model.reasoning) {
+  if (!basicResult.ok || !model.reasoning || !checkReasoning) {
     return basicResult;
   }
 
@@ -205,31 +231,6 @@ async function checkModel(provider, model) {
   };
 }
 
-async function checkModels(provider, models) {
-  const results = [];
-  const queue = [...models];
-  let active = 0;
-
-  await new Promise((resolve) => {
-    function next() {
-      while (active < HEALTH_CHECK_CONCURRENCY && queue.length > 0) {
-        const model = queue.shift();
-        active++;
-        checkModel(provider, model).then((result) => {
-          results.push({ modelId: model.id, ...result });
-          active--;
-          if (queue.length === 0 && active === 0) resolve();
-          else next();
-        });
-      }
-      if (queue.length === 0 && active === 0) resolve();
-    }
-    next();
-  });
-
-  return results;
-}
-
 function formatHealthSummary(results) {
   const passed = results.filter((r) => r.ok);
   const failed = results.filter((r) => !r.ok);
@@ -240,7 +241,7 @@ function formatHealthSummary(results) {
 
   const failedModels = failed.map((r) => `- ${r.modelId}`).join("\n");
 
-  return `Health check: ${passed.length} OK, ${failed.length} failed:\n${failedModels}`;
+  return `Health check: ${passed.length} OK, ${failed.length} failed:\n${failedModels}\n`;
 }
 
 function writeHealthCheckLog(provider, results) {
@@ -278,6 +279,7 @@ function writeHealthCheckLog(provider, results) {
   fs.writeFileSync(HEALTH_CHECK_LOG_PATH, `${lines.join("\n")}\n`, "utf8");
 }
 
+// noinspection JSUnusedGlobalSymbols
 export default async function (pi) {
   pi.registerCommand("requesty-models-sync", {
     description: "Dynamically discover Requesty models, run health checks, and update the local models.json.",
@@ -288,23 +290,32 @@ export default async function (pi) {
         const { data, provider } = getRequestyConfig();
         const models = await discoverModels(provider);
 
-        ctx.ui.setStatus("requesty-models-sync", `Checking ${models.length} model(s)...`);
-        const healthResults = await checkModels(provider, models);
-        const failed = healthResults.filter((r) => !r.ok);
-        const passing = models.filter((m) => healthResults.find((r) => r.modelId === m.id)?.ok);
-        const summary = formatHealthSummary(healthResults);
-        writeHealthCheckLog(provider, healthResults);
+        let failed = [];
+        let passing = [];
+        let logNote = '';
+        let healthCheckSummary = '';
+
+        if (HEALTH_CHECK_MODE !== "off") {
+          ctx.ui.setStatus("requesty-models-sync", `Checking ${models.length} model(s)...`);
+          const healthResults = await checkModels(provider, models, HEALTH_CHECK_MODE === "full");
+          failed = healthResults.filter((r) => !r.ok);
+          passing = models.filter((m) => healthResults.find((r) => r.modelId === m.id)?.ok);
+          healthCheckSummary = formatHealthSummary(healthResults);
+          writeHealthCheckLog(provider, healthResults);
+          logNote = `Full health check log: ${HEALTH_CHECK_LOG_PATH}\n`;
+        } else {
+          passing = models;
+        }
 
         if (passing.length > 0) {
           updateModelsJson(data, passing);
         }
 
         const writeNote = passing.length > 0 ? "Run /reload to use models.json changes." : "models.json was not updated.";
-        const logNote = `Full health check log: ${HEALTH_CHECK_LOG_PATH}`;
-        const message = `Discovered ${models.length} Requesty model(s).\n${summary}\n${logNote}\n${writeNote}`;
+        const message = `Discovered ${models.length} Requesty model(s).\n${healthCheckSummary}${logNote}${writeNote}`;
 
         if (failed.length === 0) {
-          ctx.ui.notify(message, "success");
+          ctx.ui.notify(message, "info");
         } else if (failed.length < models.length) {
           ctx.ui.notify(message, "warning");
         } else {
