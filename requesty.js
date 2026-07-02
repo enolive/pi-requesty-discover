@@ -14,7 +14,10 @@ const DEFAULT_MAX_TOKENS = 4096;
 const HEALTH_CHECK_MODE = process.env.REQUESTY_HEALTH_CHECK_MODE ?? "full";
 
 const HEALTH_CHECK_TIMEOUT_MS = 15_000;
+const HEALTH_CHECK_TIMEOUT_RETRIES = 2;
+const HEALTH_CHECK_RETRY_DELAY_MS = 500;
 const HEALTH_CHECK_CONCURRENCY = 10;
+
 
 function normalizeBaseUrl(baseUrl) {
   return baseUrl.replace(/\/+$/, "");
@@ -150,19 +153,19 @@ async function checkModels(provider, models, checkReasoning) {
 }
 
 async function postChatCompletion(provider, body) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), HEALTH_CHECK_TIMEOUT_MS);
   const start = Date.now();
-
   try {
-    const response = await fetch(`${provider.baseUrl}/chat/completions`, {
+    const response = await fetchWithTimeoutRetries(`${provider.baseUrl}/chat/completions`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${provider.apiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify(body),
-      signal: controller.signal,
+    }, {
+      timeoutMs: HEALTH_CHECK_TIMEOUT_MS,
+      retries: HEALTH_CHECK_TIMEOUT_RETRIES,
+      retryDelayMs: HEALTH_CHECK_RETRY_DELAY_MS,
     });
 
     const latencyMs = Date.now() - start;
@@ -180,11 +183,48 @@ async function postChatCompletion(provider, body) {
     return { ok: true, latencyMs };
   } catch (err) {
     const latencyMs = Date.now() - start;
-    const isTimeout = err instanceof Error && err.name === "AbortError";
-    return { ok: false, latencyMs, error: isTimeout ? `Timed out after ${HEALTH_CHECK_TIMEOUT_MS / 1000}s` : String(err) };
-  } finally {
-    clearTimeout(timer);
+    const attempts = HEALTH_CHECK_TIMEOUT_RETRIES + 1;
+    return {
+      ok: false,
+      latencyMs,
+      error: isTimeoutError(err)
+        ? `Timed out after ${attempts} attempt(s); per-attempt timeout is ${HEALTH_CHECK_TIMEOUT_MS / 1000}s`
+        : String(err),
+    };
   }
+}
+
+function isTimeoutError(error) {
+  return error instanceof Error && (error.name === "AbortError" || error.name === "TimeoutError");
+}
+
+async function fetchWithTimeoutRetries(url, options, { timeoutMs, retries, retryDelayMs }) {
+  function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  let lastError;
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await fetch(url, {
+        ...options,
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+    } catch (error) {
+      lastError = error;
+
+      if (!isTimeoutError(error) || attempt === retries) {
+        throw error;
+      }
+
+      if (retryDelayMs > 0) {
+        await sleep(retryDelayMs);
+      }
+    }
+  }
+
+  throw lastError;
 }
 
 async function checkModel(provider, model, checkReasoning) {
