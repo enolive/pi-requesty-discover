@@ -3,7 +3,7 @@
   "version": "0.2.7",
   "description": "The official Requesty extension for the Pi Coding Agent",
   "type": "module",
-  "main": "requesty.js",
+  "main": "src/index.js",
   "keywords": [
     "pi-package",
     "pi",
@@ -23,12 +23,13 @@
   },
   "pi": {
     "extensions": [
-      "./requesty.js"
+      "./src/index.js"
     ]
   },
   "files": [
-    "requesty.js",
-    "README.md"
+    "src",
+    "README.md",
+    "LICENSE"
   ],
   "devDependencies": {
     "prettier": "^3.9.4"
