@@ -283,8 +283,22 @@ function writeHealthCheckLog(provider, results) {
 export default async function (pi) {
   pi.registerCommand("requesty-models-sync", {
     description: "Dynamically discover Requesty models, run health checks, and update the local models.json.",
-    async handler(_args, ctx) {
+    getArgumentCompletions: (prefix) => {
+    const options = [
+      { value: "--dry-run", label: "[--dry-run]: Preview without writing into the new model.json file" },
+    ];
+    if (!prefix) return options;
+    return options.filter(o =>
+        o.value.toLowerCase().startsWith(prefix.toLowerCase())
+    );
+  },
+    async handler(args, ctx) {
       ctx.ui.setStatus("requesty-models-sync", "Discovering Requesty models...");
+      const parts = args.split(" ");
+      const dryRun = parts.includes("--dry-run");
+      if (dryRun) {
+        ctx.ui.notify('running in dry mode, no changes will be done')
+      }
 
       try {
         const { data, provider } = getRequestyConfig();
@@ -307,11 +321,12 @@ export default async function (pi) {
           passing = models;
         }
 
-        if (passing.length > 0) {
+        const shouldUpdate = passing.length > 0 && !dryRun;
+        if (shouldUpdate) {
           updateModelsJson(data, passing);
         }
 
-        const writeNote = passing.length > 0 ? "Run /reload to use models.json changes." : "models.json was not updated.";
+        const writeNote = shouldUpdate ? "Run /reload to use models.json changes." : "models.json was not updated.";
         const message = `Discovered ${models.length} Requesty model(s).\n${healthCheckSummary}${logNote}${writeNote}`;
 
         if (failed.length === 0) {
