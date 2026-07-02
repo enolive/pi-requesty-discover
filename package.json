@@ -4,16 +4,33 @@
   "description": "The official Requesty extension for the Pi Coding Agent",
   "type": "module",
   "main": "requesty.js",
-  "keywords": ["pi-package", "pi", "pi-coding-agent", "pi-extensions", "requesty", "openai-compatible", "models"],
+  "keywords": [
+    "pi-package",
+    "pi",
+    "pi-coding-agent",
+    "pi-extensions",
+    "requesty",
+    "openai-compatible",
+    "models"
+  ],
+  "scripts": {
+    "format:check": "prettier --check .",
+    "format": "prettier --write  ."
+  },
   "license": "MIT",
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "*"
   },
   "pi": {
-    "extensions": ["./requesty.js"]
+    "extensions": [
+      "./requesty.js"
+    ]
   },
   "files": [
     "requesty.js",
     "README.md"
-  ]
+  ],
+  "devDependencies": {
+    "prettier": "^3.9.4"
+  }
 }
