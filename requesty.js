@@ -152,6 +152,50 @@ async function checkModels(provider, models, checkReasoning) {
   return results;
 }
 
+async function checkModel(provider, model, checkReasoning) {
+  const basicResult = await postChatCompletion(provider, {
+    model: model.id,
+    messages: [{ role: "user", content: "Say OK" }],
+    max_tokens: 16,
+  });
+
+  if (!basicResult.ok || !model.reasoning || !checkReasoning) {
+    return basicResult;
+  }
+
+  const reasoningResult = await postChatCompletion(provider, {
+    model: model.id,
+    messages: [{ role: "user", content: "Say OK. Do not call any tools." }],
+    tools: [
+      {
+        type: "function",
+        function: {
+          name: "health_check_noop",
+          description: "A no-op tool used only to verify tool compatibility during model health checks.",
+          parameters: {
+            type: "object",
+            properties: {},
+            additionalProperties: false,
+          },
+        },
+      },
+    ],
+    reasoning_effort: "low"
+  });
+
+  if (!reasoningResult.ok) {
+    return {
+      ...reasoningResult,
+      error: `Reasoning/tool check failed: ${reasoningResult.error}`,
+    };
+  }
+
+  return {
+    ok: true,
+    latencyMs: basicResult.latencyMs + reasoningResult.latencyMs,
+  };
+}
+
 async function postChatCompletion(provider, body) {
   const start = Date.now();
   try {
@@ -225,50 +269,6 @@ async function fetchWithTimeoutRetries(url, options, { timeoutMs, retries, retry
   }
 
   throw lastError;
-}
-
-async function checkModel(provider, model, checkReasoning) {
-  const basicResult = await postChatCompletion(provider, {
-    model: model.id,
-    messages: [{ role: "user", content: "Say OK" }],
-    max_tokens: 16,
-  });
-
-  if (!basicResult.ok || !model.reasoning || !checkReasoning) {
-    return basicResult;
-  }
-
-  const reasoningResult = await postChatCompletion(provider, {
-    model: model.id,
-    messages: [{ role: "user", content: "Say OK. Do not call any tools." }],
-    tools: [
-      {
-        type: "function",
-        function: {
-          name: "health_check_noop",
-          description: "A no-op tool used only to verify tool compatibility during model health checks.",
-          parameters: {
-            type: "object",
-            properties: {},
-            additionalProperties: false,
-          },
-        },
-      },
-    ],
-    reasoning_effort: "low"
-  });
-
-  if (!reasoningResult.ok) {
-    return {
-      ...reasoningResult,
-      error: `Reasoning/tool check failed: ${reasoningResult.error}`,
-    };
-  }
-
-  return {
-    ok: true,
-    latencyMs: basicResult.latencyMs + reasoningResult.latencyMs,
-  };
 }
 
 function formatHealthSummary(results) {
