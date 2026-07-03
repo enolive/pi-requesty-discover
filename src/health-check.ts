@@ -27,21 +27,6 @@ type HealthCheckResult = {
 
 type ModelCheckResult = Omit<HealthCheckResult, 'modelId'>
 
-type ChatCompletionBody = {
-  model: string
-  messages: Array<{ role: 'user'; content: string }>
-  max_tokens?: number
-  tools?: Array<{
-    type: 'function'
-    function: {
-      name: string
-      description: string
-      parameters: Record<string, unknown>
-    }
-  }>
-  reasoning_effort?: 'low'
-}
-
 type RetryOptions = {
   timeoutMs: number
   retries: number
@@ -176,7 +161,7 @@ export function writeHealthCheckLog(logPath: string, provider: Provider, results
   fs.writeFileSync(logPath, `${lines.join('\n')}\n`, 'utf8')
 }
 
-export async function postChatCompletion(provider: Provider, body: ChatCompletionBody): Promise<ModelCheckResult> {
+async function postChatCompletion(provider: Provider, body: unknown): Promise<ModelCheckResult> {
   const start = Date.now()
   try {
     const response = await fetchWithTimeoutRetries(
