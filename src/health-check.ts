@@ -9,16 +9,23 @@ const HEALTH_CHECK_TIMEOUT_MS = 15_000
 const HEALTH_CHECK_TIMEOUT_RETRIES = 2
 const HEALTH_CHECK_RETRY_DELAY_MS = 500
 
+const defaultHealthCheckOptions = {
+  concurrency: HEALTH_CHECK_CONCURRENCY,
+  timeoutMs: HEALTH_CHECK_TIMEOUT_MS,
+  retries: HEALTH_CHECK_TIMEOUT_RETRIES,
+  retryDelayMs: HEALTH_CHECK_RETRY_DELAY_MS,
+}
+
 const ChatCompletionResponseSchema = z.object({
   choices: z.array(z.unknown()).min(1),
 })
 
-type Provider = {
+export type Provider = {
   baseUrl: string
   apiKey: string
 }
 
-type HealthCheckResult = {
+export type HealthCheckResult = {
   modelId: string
   ok: boolean
   latencyMs: number
@@ -27,29 +34,34 @@ type HealthCheckResult = {
 
 type ModelCheckResult = Omit<HealthCheckResult, 'modelId'>
 
-type RetryOptions = {
-  timeoutMs: number
-  retries: number
-  retryDelayMs: number
+export type HealthCheckOptions = {
+  concurrency?: number
+  timeoutMs?: number
+  retries?: number
+  retryDelayMs?: number
 }
+
+type ResolvedHealthCheckOptions = Required<HealthCheckOptions>
 
 export async function checkModels(
   provider: Provider,
   models: ProviderModelConfig[],
   checkReasoning: boolean,
+  options: HealthCheckOptions = {},
 ): Promise<HealthCheckResult[]> {
+  const healthCheckOptions = resolveHealthCheckOptions(options)
   const results: HealthCheckResult[] = []
   const queue = [...models]
   let active = 0
 
   await new Promise<void>(resolve => {
     function next() {
-      while (active < HEALTH_CHECK_CONCURRENCY && queue.length > 0) {
+      while (active < healthCheckOptions.concurrency && queue.length > 0) {
         const model = queue.shift()
         if (!model) continue
 
         active++
-        void checkModel(provider, model, checkReasoning).then(result => {
+        void checkModel(provider, model, checkReasoning, healthCheckOptions).then(result => {
           results.push({ modelId: model.id, ...result })
           active--
           if (queue.length === 0 && active === 0) resolve()
@@ -68,36 +80,45 @@ async function checkModel(
   provider: Provider,
   model: ProviderModelConfig,
   checkReasoning: boolean,
+  options: ResolvedHealthCheckOptions,
 ): Promise<ModelCheckResult> {
-  const basicResult = await postChatCompletion(provider, {
-    model: model.id,
-    messages: [{ role: 'user', content: 'Say OK' }],
-    max_tokens: 16,
-  })
+  const basicResult = await postChatCompletion(
+    provider,
+    {
+      model: model.id,
+      messages: [{ role: 'user', content: 'Say OK' }],
+      max_tokens: 16,
+    },
+    options,
+  )
 
   if (!basicResult.ok || !model.reasoning || !checkReasoning) {
     return basicResult
   }
 
-  const reasoningResult = await postChatCompletion(provider, {
-    model: model.id,
-    messages: [{ role: 'user', content: 'Say OK. Do not call any tools.' }],
-    tools: [
-      {
-        type: 'function',
-        function: {
-          name: 'health_check_noop',
-          description: 'A no-op tool used only to verify tool compatibility during model health checks.',
-          parameters: {
-            type: 'object',
-            properties: {},
-            additionalProperties: false,
+  const reasoningResult = await postChatCompletion(
+    provider,
+    {
+      model: model.id,
+      messages: [{ role: 'user', content: 'Say OK. Do not call any tools.' }],
+      tools: [
+        {
+          type: 'function',
+          function: {
+            name: 'health_check_noop',
+            description: 'A no-op tool used only to verify tool compatibility during model health checks.',
+            parameters: {
+              type: 'object',
+              properties: {},
+              additionalProperties: false,
+            },
           },
         },
-      },
-    ],
-    reasoning_effort: 'low',
-  })
+      ],
+      reasoning_effort: 'low',
+    },
+    options,
+  )
 
   if (!reasoningResult.ok) {
     return {
@@ -161,7 +182,12 @@ export function writeHealthCheckLog(logPath: string, provider: Provider, results
   fs.writeFileSync(logPath, `${lines.join('\n')}\n`, 'utf8')
 }
 
-async function postChatCompletion(provider: Provider, body: unknown): Promise<ModelCheckResult> {
+export async function postChatCompletion(
+  provider: Provider,
+  body: unknown,
+  options: HealthCheckOptions = {},
+): Promise<ModelCheckResult> {
+  const healthCheckOptions = resolveHealthCheckOptions(options)
   const start = Date.now()
   try {
     const response = await fetchWithTimeoutRetries(
@@ -174,11 +200,7 @@ async function postChatCompletion(provider: Provider, body: unknown): Promise<Mo
         },
         body: JSON.stringify(body),
       },
-      {
-        timeoutMs: HEALTH_CHECK_TIMEOUT_MS,
-        retries: HEALTH_CHECK_TIMEOUT_RETRIES,
-        retryDelayMs: HEALTH_CHECK_RETRY_DELAY_MS,
-      },
+      healthCheckOptions,
     )
 
     const latencyMs = Date.now() - start
@@ -196,21 +218,28 @@ async function postChatCompletion(provider: Provider, body: unknown): Promise<Mo
     return { ok: true, latencyMs }
   } catch (err) {
     const latencyMs = Date.now() - start
-    const attempts = HEALTH_CHECK_TIMEOUT_RETRIES + 1
+    const attempts = healthCheckOptions.retries + 1
     return {
       ok: false,
       latencyMs,
       error: isTimeoutError(err)
-        ? `Timed out after ${attempts} attempt(s); per-attempt timeout is ${HEALTH_CHECK_TIMEOUT_MS / 1000}s`
+        ? `Timed out after ${attempts} attempt(s); per-attempt timeout is ${healthCheckOptions.timeoutMs / 1000}s`
         : String(err),
     }
+  }
+}
+
+function resolveHealthCheckOptions(options: HealthCheckOptions): ResolvedHealthCheckOptions {
+  return {
+    ...defaultHealthCheckOptions,
+    ...options,
   }
 }
 
 async function fetchWithTimeoutRetries(
   url: string,
   options: RequestInit,
-  { timeoutMs, retries, retryDelayMs }: RetryOptions,
+  { timeoutMs, retries, retryDelayMs }: ResolvedHealthCheckOptions,
 ) {
   function sleep(ms: number) {
     return new Promise(resolve => setTimeout(resolve, ms))
