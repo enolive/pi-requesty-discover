@@ -14,6 +14,7 @@
     "models"
   ],
   "scripts": {
+    "agent-lint": "agnix . -v",
     "format:check": "prettier --check .",
     "format": "prettier --write  .",
     "typecheck": "tsc --noEmit",
@@ -32,11 +33,13 @@
     "src",
     "tsconfig.json",
     "README.md",
+    "AGENTS.md",
     "LICENSE"
   ],
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/node": "^26.1.0",
+    "agnix": "^0.37.0",
     "eslint": "^10.6.0",
     "globals": "^17.7.0",
     "jiti": "^2.7.0",
