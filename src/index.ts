@@ -83,7 +83,7 @@ async function runCommand(args: string, ctx: ExtensionCommandContext): Promise<v
 }
 
 // noinspection JSUnusedGlobalSymbols
-export default async function (pi: ExtensionAPI): Promise<void> {
+export default function (pi: ExtensionAPI) {
   pi.registerCommand(COMMAND_NAME, {
     description: 'Dynamically discover Requesty models, run health checks, and update the local models.json.',
     getArgumentCompletions,

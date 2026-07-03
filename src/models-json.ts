@@ -44,7 +44,7 @@ function readModelsJson(): ModelsJson {
     throw new Error(`${env.models_json_path} does not exist`)
   }
 
-  const data = JSON.parse(fs.readFileSync(env.models_json_path, 'utf8'))
+  const data = JSON.parse(fs.readFileSync(env.models_json_path, 'utf8')) as unknown
   const result = ModelsJsonSchema.safeParse(data)
 
   if (!result.success) {

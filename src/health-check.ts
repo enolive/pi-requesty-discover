@@ -64,7 +64,7 @@ export async function checkModels(
         if (!model) continue
 
         active++
-        checkModel(provider, model, checkReasoning).then(result => {
+        void checkModel(provider, model, checkReasoning).then(result => {
           results.push({ modelId: model.id, ...result })
           active--
           if (queue.length === 0 && active === 0) resolve()
