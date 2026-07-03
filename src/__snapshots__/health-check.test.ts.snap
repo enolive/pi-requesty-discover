@@ -1,0 +1,53 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`checkModels > basic check calls chat completion once per model 1`] = `
+[
+  {
+    "max_tokens": 16,
+    "messages": [
+      {
+        "content": "Say OK",
+        "role": "user",
+      },
+    ],
+    "model": "requesty/model-a",
+  },
+  {
+    "max_tokens": 16,
+    "messages": [
+      {
+        "content": "Say OK",
+        "role": "user",
+      },
+    ],
+    "model": "requesty/model-b",
+  },
+]
+`;
+
+exports[`checkModels > full check calls reasoning/tool check for reasoning models 1`] = `
+{
+  "messages": [
+    {
+      "content": "Say OK. Do not call any tools.",
+      "role": "user",
+    },
+  ],
+  "model": "requesty/reasoning-model",
+  "reasoning_effort": "low",
+  "tools": [
+    {
+      "function": {
+        "description": "A no-op tool used only to verify tool compatibility during model health checks.",
+        "name": "health_check_noop",
+        "parameters": {
+          "additionalProperties": false,
+          "properties": {},
+          "type": "object",
+        },
+      },
+      "type": "function",
+    },
+  ],
+}
+`;

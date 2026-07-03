@@ -242,31 +242,26 @@ async function fetchWithTimeoutRetries(
   { timeoutMs, retries, retryDelayMs }: ResolvedHealthCheckOptions,
 ) {
   function sleep(ms: number) {
+    if (ms <= 0) {
+      return
+    }
     return new Promise(resolve => setTimeout(resolve, ms))
   }
 
-  let lastError: unknown
-
-  for (let attempt = 0; attempt <= retries; attempt++) {
+  for (let attempt = 0; ; attempt++) {
     try {
       return await fetch(url, {
         ...options,
         signal: AbortSignal.timeout(timeoutMs),
       })
     } catch (error) {
-      lastError = error
-
-      if (!isTimeoutError(error) || attempt === retries) {
+      if (!isTimeoutError(error) || attempt >= retries) {
         throw error
       }
 
-      if (retryDelayMs > 0) {
-        await sleep(retryDelayMs)
-      }
+      await sleep(retryDelayMs)
     }
   }
-
-  throw lastError
 }
 
 function isTimeoutError(error: unknown): boolean {
