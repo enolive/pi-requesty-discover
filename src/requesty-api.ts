@@ -19,6 +19,8 @@ const RequestyModelSchema = z
   })
   .catchall(z.unknown())
 
+export type RequestyModel = z.infer<typeof RequestyModelSchema>
+
 const ListModelsResponseSchema = z.object({
   data: z.array(z.unknown()),
 })
@@ -37,7 +39,8 @@ export async function discoverModels(provider: Provider): Promise<ProviderModelC
     throw new Error(`HTTP ${response.status} ${response.statusText}`)
   }
 
-  const payload = ListModelsResponseSchema.parse(await response.json())
+  const rawData = (await response.json()) as unknown
+  const payload = ListModelsResponseSchema.parse(rawData)
 
   return payload.data
     .map(model => RequestyModelSchema.safeParse(model))
