@@ -1,7 +1,7 @@
 {
-  "name": "pi-requesty",
-  "version": "0.2.7",
-  "description": "The official Requesty extension for the Pi Coding Agent",
+  "name": "pi-requesty-discover",
+  "version": "1.0.0",
+  "description": "Discover available Requesty models for the Pi Coding Agent",
   "type": "module",
   "main": "src/index.ts",
   "keywords": [
