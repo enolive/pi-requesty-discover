@@ -1,21 +1,68 @@
+import type { ProviderModelConfig } from '@earendil-works/pi-coding-agent'
 import fs from 'node:fs'
 import path from 'node:path'
-import env from './env.js'
+import { z } from 'zod'
+import env from './env'
 
 const HEALTH_CHECK_CONCURRENCY = 10
 const HEALTH_CHECK_TIMEOUT_MS = 15_000
 const HEALTH_CHECK_TIMEOUT_RETRIES = 2
 const HEALTH_CHECK_RETRY_DELAY_MS = 500
 
-export async function checkModels(provider, models, checkReasoning) {
-  const results = []
+const ChatCompletionResponseSchema = z.object({
+  choices: z.array(z.unknown()).min(1),
+})
+
+type Provider = {
+  baseUrl: string
+  apiKey: string
+}
+
+type HealthCheckResult = {
+  modelId: string
+  ok: boolean
+  latencyMs: number
+  error?: string
+}
+
+type ModelCheckResult = Omit<HealthCheckResult, 'modelId'>
+
+type ChatCompletionBody = {
+  model: string
+  messages: Array<{ role: 'user'; content: string }>
+  max_tokens?: number
+  tools?: Array<{
+    type: 'function'
+    function: {
+      name: string
+      description: string
+      parameters: Record<string, unknown>
+    }
+  }>
+  reasoning_effort?: 'low'
+}
+
+type RetryOptions = {
+  timeoutMs: number
+  retries: number
+  retryDelayMs: number
+}
+
+export async function checkModels(
+  provider: Provider,
+  models: ProviderModelConfig[],
+  checkReasoning: boolean,
+): Promise<HealthCheckResult[]> {
+  const results: HealthCheckResult[] = []
   const queue = [...models]
   let active = 0
 
-  await new Promise(resolve => {
+  await new Promise<void>(resolve => {
     function next() {
       while (active < HEALTH_CHECK_CONCURRENCY && queue.length > 0) {
         const model = queue.shift()
+        if (!model) continue
+
         active++
         checkModel(provider, model, checkReasoning).then(result => {
           results.push({ modelId: model.id, ...result })
@@ -32,7 +79,11 @@ export async function checkModels(provider, models, checkReasoning) {
   return results
 }
 
-async function checkModel(provider, model, checkReasoning) {
+async function checkModel(
+  provider: Provider,
+  model: ProviderModelConfig,
+  checkReasoning: boolean,
+): Promise<ModelCheckResult> {
   const basicResult = await postChatCompletion(provider, {
     model: model.id,
     messages: [{ role: 'user', content: 'Say OK' }],
@@ -65,7 +116,8 @@ async function checkModel(provider, model, checkReasoning) {
 
   if (!reasoningResult.ok) {
     return {
-      ...reasoningResult,
+      ok: false,
+      latencyMs: reasoningResult.latencyMs,
       error: `Reasoning/tool check failed: ${reasoningResult.error}`,
     }
   }
@@ -76,7 +128,7 @@ async function checkModel(provider, model, checkReasoning) {
   }
 }
 
-export function formatHealthSummary(results) {
+export function formatHealthSummary(results: HealthCheckResult[]): string {
   const passed = results.filter(r => r.ok)
   const failed = results.filter(r => !r.ok)
 
@@ -89,7 +141,7 @@ export function formatHealthSummary(results) {
   return `Health check: ${passed.length} OK, ${failed.length} failed:\n${failedModels}\n`
 }
 
-export function writeHealthCheckLog(logPath, provider, results) {
+export function writeHealthCheckLog(logPath: string, provider: Provider, results: HealthCheckResult[]): void {
   const passed = results.filter(r => r.ok)
   const failed = results.filter(r => !r.ok)
   const lines = [
@@ -124,7 +176,7 @@ export function writeHealthCheckLog(logPath, provider, results) {
   fs.writeFileSync(logPath, `${lines.join('\n')}\n`, 'utf8')
 }
 
-export async function postChatCompletion(provider, body) {
+export async function postChatCompletion(provider: Provider, body: ChatCompletionBody): Promise<ModelCheckResult> {
   const start = Date.now()
   try {
     const response = await fetchWithTimeoutRetries(
@@ -151,8 +203,8 @@ export async function postChatCompletion(provider, body) {
       return { ok: false, latencyMs, error: `HTTP ${response.status} ${response.statusText}${text ? `: ${text}` : ''}` }
     }
 
-    const payload = await response.json()
-    if (!payload?.choices?.length) {
+    const result = ChatCompletionResponseSchema.safeParse(await response.json())
+    if (!result.success) {
       return { ok: false, latencyMs, error: 'Empty choices in response' }
     }
 
@@ -170,12 +222,16 @@ export async function postChatCompletion(provider, body) {
   }
 }
 
-async function fetchWithTimeoutRetries(url, options, { timeoutMs, retries, retryDelayMs }) {
-  function sleep(ms) {
+async function fetchWithTimeoutRetries(
+  url: string,
+  options: RequestInit,
+  { timeoutMs, retries, retryDelayMs }: RetryOptions,
+) {
+  function sleep(ms: number) {
     return new Promise(resolve => setTimeout(resolve, ms))
   }
 
-  let lastError
+  let lastError: unknown
 
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
@@ -199,6 +255,6 @@ async function fetchWithTimeoutRetries(url, options, { timeoutMs, retries, retry
   throw lastError
 }
 
-function isTimeoutError(error) {
+function isTimeoutError(error: unknown): boolean {
   return error instanceof Error && (error.name === 'AbortError' || error.name === 'TimeoutError')
 }

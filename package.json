@@ -3,7 +3,7 @@
   "version": "0.2.7",
   "description": "The official Requesty extension for the Pi Coding Agent",
   "type": "module",
-  "main": "src/index.js",
+  "main": "src/index.ts",
   "keywords": [
     "pi-package",
     "pi",
@@ -15,7 +15,8 @@
   ],
   "scripts": {
     "format:check": "prettier --check .",
-    "format": "prettier --write  ."
+    "format": "prettier --write  .",
+    "typecheck": "tsc --noEmit"
   },
   "license": "MIT",
   "peerDependencies": {
@@ -23,15 +24,21 @@
   },
   "pi": {
     "extensions": [
-      "./src/index.js"
+      "./src/index.ts"
     ]
   },
   "files": [
     "src",
+    "tsconfig.json",
     "README.md",
     "LICENSE"
   ],
   "devDependencies": {
-    "prettier": "^3.9.4"
+    "@types/node": "^26.1.0",
+    "prettier": "^3.9.4",
+    "typescript": "^6.0.3"
+  },
+  "dependencies": {
+    "zod": "^4.4.3"
   }
 }
