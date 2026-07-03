@@ -2,7 +2,7 @@ import type { ProviderConfig, ProviderModelConfig } from '@earendil-works/pi-cod
 import fs from 'node:fs'
 import path from 'node:path'
 import { z } from 'zod'
-import env from './env'
+import env, { type Env } from './env'
 
 const DEFAULT_BASE_URL = 'https://router.requesty.ai/v1'
 const DEFAULT_NAME = 'Requesty'
@@ -39,34 +39,34 @@ function normalizeBaseUrl(baseUrl: string): string {
   return baseUrl.replace(/\/+$/, '')
 }
 
-function readModelsJson(): ModelsJson {
-  if (!fs.existsSync(env.models_json_path)) {
-    throw new Error(`${env.models_json_path} does not exist`)
+function readModelsJson(envConfig: Env = env): ModelsJson {
+  if (!fs.existsSync(envConfig.models_json_path)) {
+    throw new Error(`${envConfig.models_json_path} does not exist`)
   }
 
-  const data = JSON.parse(fs.readFileSync(env.models_json_path, 'utf8')) as unknown
+  const data = JSON.parse(fs.readFileSync(envConfig.models_json_path, 'utf8')) as unknown
   const result = ModelsJsonSchema.safeParse(data)
 
   if (!result.success) {
-    throw new Error(`${env.models_json_path} is invalid: ${z.prettifyError(result.error)}`)
+    throw new Error(`${envConfig.models_json_path} is invalid: ${z.prettifyError(result.error)}`)
   }
 
   return result.data
 }
 
-export function getRequestyConfig(): RequestyConfig {
-  const data = readModelsJson()
-  const provider = data.providers[env.provider_id]
+export function getRequestyConfig(envConfig: Env = env): RequestyConfig {
+  const data = readModelsJson(envConfig)
+  const provider = data.providers[envConfig.provider_id]
 
   if (!provider) {
-    throw new Error(`${env.models_json_path} does not define providers.${env.provider_id}`)
+    throw new Error(`${envConfig.models_json_path} does not define providers.${envConfig.provider_id}`)
   }
 
-  const apiKey = env.requesty_api_key || nonEmptyString(provider.apiKey)
+  const apiKey = envConfig.requesty_api_key || nonEmptyString(provider.apiKey)
 
   if (!apiKey) {
     throw new Error(
-      `providers.${env.provider_id}.apiKey must be set in ${env.models_json_path} or via REQUESTY_API_KEY env var`,
+      `providers.${envConfig.provider_id}.apiKey must be set in ${envConfig.models_json_path} or via REQUESTY_API_KEY env var`,
     )
   }
 
@@ -81,16 +81,20 @@ export function getRequestyConfig(): RequestyConfig {
   }
 }
 
-function writeModelsJson(data: ModelsJson): void {
-  fs.mkdirSync(path.dirname(env.models_json_path), { recursive: true })
-  const tmpPath = `${env.models_json_path}.tmp`
+function writeModelsJson(data: ModelsJson, envConfig: Env = env): void {
+  fs.mkdirSync(path.dirname(envConfig.models_json_path), { recursive: true })
+  const tmpPath = `${envConfig.models_json_path}.tmp`
   fs.writeFileSync(tmpPath, `${JSON.stringify(data, null, 2)}\n`, 'utf8')
-  fs.renameSync(tmpPath, env.models_json_path)
+  fs.renameSync(tmpPath, envConfig.models_json_path)
 }
 
-export function updateModelsJson(data: ModelsJson, models: ProviderModelConfig[]): void {
-  data.providers[env.provider_id] = {
-    ...data.providers[env.provider_id],
+export function updateModelsJson(
+  data: ModelsJson,
+  models: ProviderModelConfig[],
+  envConfig: Env = env,
+): void {
+  data.providers[envConfig.provider_id] = {
+    ...data.providers[envConfig.provider_id],
     models: models.map(model => ({
       id: model.id,
       name: model.name,
@@ -102,7 +106,7 @@ export function updateModelsJson(data: ModelsJson, models: ProviderModelConfig[]
     })),
   } satisfies ProviderConfig
 
-  writeModelsJson(data)
+  writeModelsJson(data, envConfig)
 }
 
 function nonEmptyString(value: string | undefined): string | undefined {
