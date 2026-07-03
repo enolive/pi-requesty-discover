@@ -1,8 +1,13 @@
+import type { ProviderModelConfig } from '@earendil-works/pi-coding-agent'
 import fs from 'node:fs/promises'
+import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { Env } from './env'
-import { getRequestyConfig } from './models-json'
-import { createTempDirectory, TempDirectory } from '../test/helpers/temp-agent.ts'
+import { getRequestyConfig, updateModelsJson } from './models-json'
+import { createTempDirectory, type TempDirectory } from '../test/helpers/temp-agent'
+
+type TestProvider = Record<string, unknown> & { models?: unknown }
+type TestModelsJson = { providers: Record<string, TestProvider> }
 
 describe('getRequestyConfig', () => {
   let tempDirectory: TempDirectory
@@ -39,6 +44,18 @@ describe('getRequestyConfig', () => {
     expect(readConfig).toThrow(`${envConfig.models_json_path} is invalid`)
   })
 
+  it('throws if API key is missing from models.json and env', async () => {
+    const envConfig = await createEnvWithModelsJson(tempDirectory, {
+      providers: { 'requesty-export': {} },
+    })
+
+    const readConfig = () => getRequestyConfig(envConfig)
+
+    expect(readConfig).toThrow(
+      `providers.requesty-export.apiKey must be set in ${envConfig.models_json_path} or via REQUESTY_API_KEY env var`,
+    )
+  })
+
   it('throws if configured provider is missing', async () => {
     const envConfig = await createEnvWithModelsJson(tempDirectory, {
       providers: { other: { apiKey: 'models-json-key' } },
@@ -46,7 +63,9 @@ describe('getRequestyConfig', () => {
 
     const readConfig = () => getRequestyConfig(envConfig)
 
-    expect(readConfig).toThrow(`${envConfig.models_json_path} does not define providers.requesty-export`)
+    expect(readConfig).toThrow(
+      `${envConfig.models_json_path} does not define providers.requesty-export`,
+    )
   })
 
   it('reads provider config from models.json', async () => {
@@ -116,6 +135,90 @@ describe('getRequestyConfig', () => {
   })
 })
 
+describe('updateModelsJson', () => {
+  let tempDirectory: TempDirectory
+
+  beforeEach(async () => {
+    tempDirectory = await createTempDirectory()
+  })
+
+  afterEach(async () => {
+    await tempDirectory.clean()
+  })
+
+  it('writes models into selected provider', async () => {
+    const envConfig = await createEnvWithModelsJson(tempDirectory, {
+      providers: { 'requesty-export': { apiKey: 'models-json-key', models: [] } },
+    })
+    const data = getRequestyConfig(envConfig).data
+    const models = [createModel({ id: 'requesty/model-a', name: 'Model A' })]
+
+    updateModelsJson(data, models, envConfig)
+
+    const written = await readModelsJsonFile(envConfig)
+    expect(written).toMatchSnapshot()
+  })
+
+  it('preserves selected provider fields', async () => {
+    const originalRequestyProvider = {
+      name: 'Custom Requesty',
+      baseUrl: 'https://example.com/v1',
+      api: 'openai-completions',
+      apiKey: 'models-json-key',
+      customField: 'custom-value',
+    }
+
+    const envConfig = await createEnvWithModelsJson(tempDirectory, {
+      providers: { 'requesty-export': originalRequestyProvider },
+    })
+    const data = getRequestyConfig(envConfig).data
+    const models = [createModel(), createModel(), createModel()]
+
+    updateModelsJson(data, models, envConfig)
+
+    const written = await readModelsJsonFile(envConfig)
+    expect(written.providers['requesty-export']).toEqual(expect.objectContaining(originalRequestyProvider))
+  })
+
+  it('preserves other providers', async () => {
+    const originalAnthropicProvider = {
+      name: 'Anthropic',
+      apiKey: 'anthropic-key',
+      models: [{ id: 'claude', name: 'Claude' }],
+    }
+    const envConfig = await createEnvWithModelsJson(tempDirectory, {
+      providers: {
+        'requesty-export': { apiKey: 'models-json-key', models: [] },
+        anthropic: originalAnthropicProvider,
+      },
+    })
+    const data = getRequestyConfig(envConfig).data
+    const models = [createModel()]
+
+    updateModelsJson(data, models, envConfig)
+
+    const written = await readModelsJsonFile(envConfig)
+    expect(written.providers.anthropic).toEqual(originalAnthropicProvider)
+  })
+
+  it('creates parent directory if needed', async () => {
+    const modelsJsonPath = path.join(tempDirectory.homeDir, 'nested', 'agent', 'models.json')
+    const envConfig = {
+      ...createTestEnv(tempDirectory),
+      models_json_path: modelsJsonPath,
+    }
+    const data = {
+      providers: { 'requesty-export': { apiKey: 'models-json-key', models: [] } },
+    }
+    const models = [createModel()]
+
+    updateModelsJson(data, models, envConfig)
+
+    const content = await fs.readFile(modelsJsonPath, 'utf8')
+    expect(content).toContain('requesty/model')
+  })
+})
+
 function createTestEnv(tempDirectory: TempDirectory): Env {
   return {
     models_json_path: tempDirectory.modelsJsonPath,
@@ -133,4 +236,27 @@ async function createEnvWithModelsJsonContent(tempDirectory: TempDirectory, cont
 
 async function createEnvWithModelsJson(tempDirectory: TempDirectory, data: unknown) {
   return createEnvWithModelsJsonContent(tempDirectory, JSON.stringify(data))
+}
+
+async function readModelsJsonFile(envConfig: Env): Promise<TestModelsJson> {
+  const content = await fs.readFile(envConfig.models_json_path, 'utf8')
+  return JSON.parse(content) as TestModelsJson
+}
+
+function createModel(overrides: Partial<ProviderModelConfig> = {}): ProviderModelConfig {
+  return {
+    id: 'requesty/model',
+    name: 'Requesty Model',
+    reasoning: false,
+    input: ['text'],
+    cost: {
+      input: 1,
+      output: 2,
+      cacheRead: 3,
+      cacheWrite: 4,
+    },
+    contextWindow: 128000,
+    maxTokens: 4096,
+    ...overrides,
+  }
 }
