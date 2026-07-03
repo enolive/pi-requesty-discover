@@ -1,7 +1,16 @@
 import type { ProviderModelConfig, RegisteredCommand } from '@earendil-works/pi-coding-agent'
 import { describe, expect, it, vi } from 'vitest'
 import type { HealthCheckResult, Provider } from './health-check'
+import * as HealthCheckModule from './health-check'
+import * as ModelsJsonModule from './models-json'
+import * as RequestyApiModule from './requesty-api'
+import * as EnvModule from './env'
 import { createFakeCommandContext, createFakePi } from '../test/helpers/fake-pi'
+
+vi.mock('./health-check')
+vi.mock('./models-json')
+vi.mock('./requesty-api')
+vi.mock('./env')
 
 type TestCommand = Omit<RegisteredCommand, 'name' | 'sourceInfo'>
 type HealthCheckMode = 'off' | 'basic' | 'full'
@@ -18,11 +27,11 @@ const COMMAND_NAME = 'requesty-models-sync'
 const MODELS_JSON_PATH = '/tmp/pi-requesty-home/.pi/agent/models.json'
 const HEALTH_CHECK_LOG_PATH = '/tmp/pi-requesty-home/.pi/agent/requesty-health-check.log'
 
-const provider: Provider = {
+const provider = {
   name: 'Requesty',
   baseUrl: 'https://router.requesty.ai/v1',
   apiKey: 'test-key',
-} as Provider
+} satisfies Provider & { name: string }
 
 const modelsJson = {
   providers: {
@@ -155,61 +164,76 @@ describe('command flow', () => {
     expectAllNotificationsPrefixed(notifications)
   })
 
-  it('sets status while running', async () => {
-    const { command } = await loadExtension()
+  it('sets progress status while checking models', async () => {
+    const models = [createModel({ id: 'requesty/model-a' }), createModel({ id: 'requesty/model-b' })]
+    const { command } = await loadExtension({ models })
     const { ctx, statuses } = createFakeCommandContext()
 
     await command.handler('', ctx)
 
     expect(statuses).toEqual([
       { key: COMMAND_NAME, text: 'Discovering Requesty models...' },
-      { key: COMMAND_NAME, text: 'Checking 1 model(s)...' },
+      { key: COMMAND_NAME, text: 'Checking models 0/2...' },
+      { key: COMMAND_NAME, text: 'Checking models 1/2...' },
+      { key: COMMAND_NAME, text: 'Checking models 2/2...' },
       { key: COMMAND_NAME, text: undefined },
     ])
   })
 })
 
 async function loadExtension(options: LoadExtensionOptions = {}) {
-  vi.resetModules()
-
   const models = options.models ?? [createModel({ id: 'requesty/model-a' })]
   const healthResults = options.healthResults ?? models.map(model => createHealthCheckResult({ modelId: model.id }))
-  const getRequestyConfig = vi.fn(() => {
-    if (options.getRequestyConfigError) {
-      throw options.getRequestyConfigError
-    }
+  const getRequestyConfig = vi.mocked(ModelsJsonModule.getRequestyConfig)
+  if (options.getRequestyConfigError) {
+    getRequestyConfig.mockThrow(options.getRequestyConfigError)
+  } else {
+    getRequestyConfig.mockReturnValue({ data: modelsJson, provider })
+  }
+  const updateModelsJson = vi.mocked(ModelsJsonModule.updateModelsJson)
+  const discoverModels = vi.mocked(RequestyApiModule.discoverModels)
+  if (options.discoverModelsError) {
+    discoverModels.mockRejectedValue(options.discoverModelsError)
+  } else {
+    discoverModels.mockResolvedValue(models)
+  }
 
-    return { data: modelsJson, provider }
-  })
-  const updateModelsJson = vi.fn()
-  const discoverModels = vi.fn(() => {
-    if (options.discoverModelsError) {
-      return Promise.reject(options.discoverModelsError)
-    }
-
-    return Promise.resolve(models)
-  })
-  const checkModels = vi.fn(() => Promise.resolve(healthResults))
-  const formatHealthSummary = vi.fn(() => 'Health check summary.\n')
-  const writeHealthCheckLog = vi.fn()
-
-  vi.doMock('./env', () => ({
-    default: {
-      models_json_path: MODELS_JSON_PATH,
-      health_check_log_path: HEALTH_CHECK_LOG_PATH,
-      provider_id: 'requesty-export',
-      requesty_api_key: undefined,
-      health_check_mode: options.healthCheckMode ?? 'basic',
+  const checkModels = vi.mocked(HealthCheckModule.checkModels)
+  checkModels.mockImplementation(
+    async (
+      _provider,
+      checkedModels,
+      _checkReasoning,
+      healthCheckOptions,
+      // part of function signature
+      // eslint-disable-next-line @typescript-eslint/require-await
+    ) => {
+      healthResults.forEach((result, index) => {
+        healthCheckOptions?.onProgress?.({
+          completed: index + 1,
+          total: checkedModels.length,
+          modelId: result.modelId,
+        })
+      })
+      return healthResults
     },
-  }))
-  vi.doMock('./models-json', () => ({ getRequestyConfig, updateModelsJson }))
-  vi.doMock('./requesty-api', () => ({ discoverModels }))
-  vi.doMock('./health-check', () => ({ checkModels, formatHealthSummary, writeHealthCheckLog }))
+  )
 
+  const formatHealthSummary = vi.mocked(HealthCheckModule.formatHealthSummary)
+  formatHealthSummary.mockReturnValue('Health check summary.\n')
+  const writeHealthCheckLog = vi.mocked(HealthCheckModule.writeHealthCheckLog)
   const extension = await import('./index')
   const { pi, commands } = createFakePi()
   extension.default(pi)
   const command = commands.get(COMMAND_NAME)
+  const getEnv = vi.mocked(EnvModule.getEnv)
+  getEnv.mockReturnValue({
+    models_json_path: MODELS_JSON_PATH,
+    health_check_log_path: HEALTH_CHECK_LOG_PATH,
+    provider_id: 'requesty-export',
+    requesty_api_key: undefined,
+    health_check_mode: options.healthCheckMode ?? 'basic',
+  })
 
   if (!command) {
     throw new Error(`${COMMAND_NAME} was not registered`)

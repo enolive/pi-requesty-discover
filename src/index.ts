@@ -46,8 +46,12 @@ async function runCommand(args: string, ctx: ExtensionCommandContext): Promise<v
     let healthCheckSummary = ''
 
     if (env.health_check_mode !== 'off') {
-      ctx.ui.setStatus(COMMAND_NAME, `Checking ${models.length} model(s)...`)
-      const healthResults = await checkModels(provider, models, env.health_check_mode === 'full')
+      ctx.ui.setStatus(COMMAND_NAME, `Checking models 0/${models.length}...`)
+      const healthResults = await checkModels(provider, models, env.health_check_mode === 'full', {
+        onProgress: ({ completed, total }) => {
+          ctx.ui.setStatus(COMMAND_NAME, `Checking models ${completed}/${total}...`)
+        },
+      })
       failed = healthResults.filter(r => !r.ok)
       passing = healthResults.flatMap(r => {
         const model = modelsMap.get(r.modelId)
