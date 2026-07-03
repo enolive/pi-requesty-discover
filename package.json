@@ -18,7 +18,11 @@
     "format:check": "prettier --check .",
     "format": "prettier --write  .",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:unit": "vitest run src",
+    "test:integration": "vitest run test/integration.test.ts",
+    "test:watch": "vitest"
   },
   "license": "MIT",
   "peerDependencies": {
@@ -43,9 +47,11 @@
     "eslint": "^10.6.0",
     "globals": "^17.7.0",
     "jiti": "^2.7.0",
+    "msw": "^2.14.6",
     "prettier": "^3.9.4",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.62.1"
+    "typescript-eslint": "^8.62.1",
+    "vitest": "^4.1.9"
   },
   "dependencies": {
     "zod": "^4.4.3"
