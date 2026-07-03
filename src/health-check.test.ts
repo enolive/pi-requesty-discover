@@ -9,6 +9,7 @@ import {
   writeHealthCheckLog,
   type HealthCheckResult,
   type Provider,
+  HealthCheckProgress,
 } from './health-check'
 import { createTempDirectory, type TempDirectory } from '../test/helpers/temp-agent'
 import { server } from '../test/setup'
@@ -162,10 +163,11 @@ describe('postChatCompletion', () => {
 })
 
 describe('checkModels', () => {
+  const completionsEndpoint = 'https://router.requesty.ai/v1/chat/completions'
   it('calls basic completion check once per model', async () => {
     const requestBodies: unknown[] = []
     server.use(
-      http.post('https://router.requesty.ai/v1/chat/completions', async ({ request }) => {
+      http.post(completionsEndpoint, async ({ request }) => {
         requestBodies.push(await request.json())
         return HttpResponse.json(positiveResponse)
       }),
@@ -180,7 +182,7 @@ describe('checkModels', () => {
   it('calls basic and reasoning/tool check for reasoning models', async () => {
     const requestBodies: unknown[] = []
     server.use(
-      http.post('https://router.requesty.ai/v1/chat/completions', async ({ request }) => {
+      http.post(completionsEndpoint, async ({ request }) => {
         requestBodies.push(await request.json())
         return HttpResponse.json(positiveResponse)
       }),
@@ -195,7 +197,7 @@ describe('checkModels', () => {
   it('returns expected response for failed reasoning/tool check', async () => {
     let requestNumber = 0
     server.use(
-      http.post('https://router.requesty.ai/v1/chat/completions', () => {
+      http.post(completionsEndpoint, () => {
         requestNumber++
         if (requestNumber > 1) {
           return HttpResponse.text('BAM', { status: 418 })
@@ -221,7 +223,7 @@ describe('checkModels', () => {
   it('does not call reasoning/tool check for non-reasoning models', async () => {
     const requestBodies: unknown[] = []
     server.use(
-      http.post('https://router.requesty.ai/v1/chat/completions', async ({ request }) => {
+      http.post(completionsEndpoint, async ({ request }) => {
         requestBodies.push(await request.json())
         return HttpResponse.json(positiveResponse)
       }),
@@ -237,7 +239,7 @@ describe('checkModels', () => {
   it('does not call reasoning/tool check when basic check fails', async () => {
     const requestBodies: unknown[] = []
     server.use(
-      http.post('https://router.requesty.ai/v1/chat/completions', async ({ request }) => {
+      http.post(completionsEndpoint, async ({ request }) => {
         requestBodies.push(await request.json())
         return HttpResponse.text('model failed', { status: 500, statusText: 'Internal Server Error' })
       }),
@@ -255,7 +257,7 @@ describe('checkModels', () => {
 
   it('returns result objects with modelId', async () => {
     server.use(
-      http.post('https://router.requesty.ai/v1/chat/completions', () => {
+      http.post(completionsEndpoint, () => {
         return HttpResponse.json(positiveResponse)
       }),
     )
@@ -271,11 +273,60 @@ describe('checkModels', () => {
     )
   })
 
+  it('reports progress after each model finishes', async () => {
+    server.use(
+      http.post(completionsEndpoint, async ({ request }) => {
+        const body = (await request.json()) as { model: string }
+        if (body.model === 'requesty/model-b') {
+          return HttpResponse.text('model failed', { status: 500, statusText: 'Internal Server Error' })
+        }
+        return HttpResponse.json(positiveResponse)
+      }),
+    )
+    const models = [
+      createModel({ id: 'requesty/model-a' }),
+      createModel({ id: 'requesty/model-b' }),
+      createModel({ id: 'requesty/model-c' }),
+    ]
+    const progressEvents: HealthCheckProgress[] = []
+
+    await checkModels(PROVIDER, models, false, {
+      concurrency: 1,
+      onProgress: progress => progressEvents.push(progress),
+    })
+
+    expect(progressEvents).toEqual([
+      {
+        completed: 1,
+        total: 3,
+        modelId: 'requesty/model-a',
+      },
+      {
+        completed: 2,
+        total: 3,
+        modelId: 'requesty/model-b',
+      },
+      {
+        completed: 3,
+        total: 3,
+        modelId: 'requesty/model-c',
+      },
+    ])
+  })
+
+  it('does not report progress when there are no models', async () => {
+    const progressEvents: Array<unknown> = []
+
+    await checkModels(PROVIDER, [], false, { onProgress: progress => progressEvents.push(progress) })
+
+    expect(progressEvents).toEqual([])
+  })
+
   it('respects parameterized concurrency', async () => {
     let activeRequests = 0
     let maxActiveRequests = 0
     server.use(
-      http.post('https://router.requesty.ai/v1/chat/completions', async () => {
+      http.post(completionsEndpoint, async () => {
         activeRequests++
         maxActiveRequests = Math.max(maxActiveRequests, activeRequests)
         await delay(50)
@@ -297,7 +348,7 @@ describe('checkModels', () => {
 
   it('continues processing queued models after failures', async () => {
     server.use(
-      http.post('https://router.requesty.ai/v1/chat/completions', async ({ request }) => {
+      http.post(completionsEndpoint, async ({ request }) => {
         const body = (await request.json()) as { model: string }
         await delay(50)
         if (body.model === 'requesty/model-b') {

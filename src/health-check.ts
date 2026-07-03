@@ -34,14 +34,22 @@ export type HealthCheckResult = {
 
 type ModelCheckResult = Omit<HealthCheckResult, 'modelId'>
 
+export type HealthCheckProgress = {
+  completed: number
+  total: number
+  modelId: string
+}
+
 export type HealthCheckOptions = {
   concurrency?: number
   timeoutMs?: number
   retries?: number
   retryDelayMs?: number
+  onProgress?: (progress: HealthCheckProgress) => void
 }
 
-type ResolvedHealthCheckOptions = Required<HealthCheckOptions>
+type ResolvedHealthCheckOptions = Required<Omit<HealthCheckOptions, 'onProgress'>> &
+  Pick<HealthCheckOptions, 'onProgress'>
 
 export async function checkModels(
   provider: Provider,
@@ -52,7 +60,9 @@ export async function checkModels(
   const healthCheckOptions = resolveHealthCheckOptions(options)
   const results: HealthCheckResult[] = []
   const queue = [...models]
+  const total = models.length
   let active = 0
+  let completed = 0
 
   await new Promise<void>(resolve => {
     function next() {
@@ -62,7 +72,10 @@ export async function checkModels(
 
         active++
         void checkModel(provider, model, checkReasoning, healthCheckOptions).then(result => {
-          results.push({ modelId: model.id, ...result })
+          const healthCheckResult = { modelId: model.id, ...result }
+          results.push(healthCheckResult)
+          completed++
+          healthCheckOptions.onProgress?.({ completed, total, modelId: model.id })
           active--
           if (queue.length === 0 && active === 0) resolve()
           else next()
