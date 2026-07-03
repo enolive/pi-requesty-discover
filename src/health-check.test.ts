@@ -1,7 +1,16 @@
 import type { ProviderModelConfig } from '@earendil-works/pi-coding-agent'
+import fs from 'node:fs/promises'
 import { delay, http, HttpResponse } from 'msw'
-import { describe, expect, it } from 'vitest'
-import { checkModels, postChatCompletion, type Provider } from './health-check'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import {
+  checkModels,
+  formatHealthSummary,
+  postChatCompletion,
+  writeHealthCheckLog,
+  type HealthCheckResult,
+  type Provider,
+} from './health-check'
+import { createTempDirectory, type TempDirectory } from '../test/helpers/temp-agent'
 import { server } from '../test/setup'
 
 const PROVIDER: Provider = {
@@ -153,7 +162,7 @@ describe('postChatCompletion', () => {
 })
 
 describe('checkModels', () => {
-  it('basic check calls chat completion once per model', async () => {
+  it('calls basic completion check once per model', async () => {
     const requestBodies: unknown[] = []
     server.use(
       http.post('https://router.requesty.ai/v1/chat/completions', async ({ request }) => {
@@ -168,23 +177,48 @@ describe('checkModels', () => {
     expect(requestBodies).toMatchSnapshot()
   })
 
-  it('full check calls reasoning/tool check for reasoning models', async () => {
+  it('calls basic and reasoning/tool check for reasoning models', async () => {
     const requestBodies: unknown[] = []
     server.use(
       http.post('https://router.requesty.ai/v1/chat/completions', async ({ request }) => {
         requestBodies.push(await request.json())
-        return HttpResponse.json({ choices: [{ message: { role: 'assistant', content: 'OK' } }] })
+        return HttpResponse.json(positiveResponse)
       }),
     )
     const models = [createModel({ id: 'requesty/reasoning-model', reasoning: true })]
 
     await checkModels(PROVIDER, models, true)
 
-    expect(requestBodies).toHaveLength(2)
-    expect(requestBodies[1]).toMatchSnapshot()
+    expect(requestBodies).toMatchSnapshot()
   })
 
-  it('full check does not call reasoning/tool check for non-reasoning models', async () => {
+  it('returns expected response for failed reasoning/tool check', async () => {
+    let requestNumber = 0
+    server.use(
+      http.post('https://router.requesty.ai/v1/chat/completions', () => {
+        requestNumber++
+        if (requestNumber > 1) {
+          return HttpResponse.text('BAM', { status: 418 })
+        }
+        return HttpResponse.json(positiveResponse)
+      }),
+    )
+    const models = [createModel({ id: 'requesty/reasoning-model', reasoning: true })]
+
+    const results = await checkModels(PROVIDER, models, true)
+
+    expect(results).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          error: "Reasoning/tool check failed: HTTP 418 I'm a Teapot: BAM",
+          modelId: 'requesty/reasoning-model',
+          ok: false,
+        }),
+      ]),
+    )
+  })
+
+  it('does not call reasoning/tool check for non-reasoning models', async () => {
     const requestBodies: unknown[] = []
     server.use(
       http.post('https://router.requesty.ai/v1/chat/completions', async ({ request }) => {
@@ -200,7 +234,7 @@ describe('checkModels', () => {
     expect(requestBodies[0]).toMatchObject({ model: 'requesty/non-reasoning-model' })
   })
 
-  it('failed basic check does not run reasoning/tool check', async () => {
+  it('does not call reasoning/tool check when basic check fails', async () => {
     const requestBodies: unknown[] = []
     server.use(
       http.post('https://router.requesty.ai/v1/chat/completions', async ({ request }) => {
@@ -292,6 +326,86 @@ describe('checkModels', () => {
     )
   })
 })
+
+describe('health summary and log output', () => {
+  let tempDirectory: TempDirectory
+
+  beforeEach(async () => {
+    tempDirectory = await createTempDirectory()
+  })
+
+  afterEach(async () => {
+    await tempDirectory.clean()
+  })
+
+  it('formats summaries', () => {
+    const allPassedResults = [
+      createHealthCheckResult({ modelId: 'requesty/model-a', ok: true }),
+      createHealthCheckResult({ modelId: 'requesty/model-b', ok: true }),
+    ]
+    const partialFailureResults = [
+      createHealthCheckResult({ modelId: 'requesty/model-a', ok: true }),
+      createHealthCheckResult({
+        modelId: 'requesty/failing-model',
+        ok: false,
+        error: 'HTTP 500 Internal Server Error',
+      }),
+    ]
+    const allFailedResults = [
+      createHealthCheckResult({ modelId: 'requesty/model-a', ok: false, error: 'first failure' }),
+      createHealthCheckResult({ modelId: 'requesty/model-b', ok: false, error: 'second failure' }),
+    ]
+
+    const summaries = {
+      allPassed: formatHealthSummary(allPassedResults),
+      partialFailure: formatHealthSummary(partialFailureResults),
+      allFailed: formatHealthSummary(allFailedResults),
+    }
+
+    expect(summaries).toMatchSnapshot()
+  })
+
+  it('writes log file', async () => {
+    const partialFailureResults = [
+      createHealthCheckResult({ modelId: 'requesty/model-a', ok: true }),
+      createHealthCheckResult({
+        modelId: 'requesty/failing-model',
+        ok: false,
+        error: 'HTTP 500 Internal Server Error',
+      }),
+    ]
+
+    writeHealthCheckLog(tempDirectory.healthCheckLogPath, PROVIDER, partialFailureResults)
+
+    const log = await fs.readFile(tempDirectory.healthCheckLogPath, 'utf8')
+    expect(normalizeHealthCheckLog(log)).toMatchSnapshot()
+  })
+
+  it('writes log file without any errors', async () => {
+    const partialFailureResults = [
+      createHealthCheckResult({ modelId: 'requesty/model-a', ok: true }),
+      createHealthCheckResult({ modelId: 'requesty/model-b', ok: true }),
+    ]
+
+    writeHealthCheckLog(tempDirectory.healthCheckLogPath, PROVIDER, partialFailureResults)
+
+    const log = await fs.readFile(tempDirectory.healthCheckLogPath, 'utf8')
+    expect(normalizeHealthCheckLog(log)).toMatchSnapshot()
+  })
+})
+
+function createHealthCheckResult(overrides: Partial<HealthCheckResult> = {}): HealthCheckResult {
+  return {
+    modelId: 'requesty/model',
+    ok: true,
+    latencyMs: 123,
+    ...overrides,
+  }
+}
+
+function normalizeHealthCheckLog(log: string): string {
+  return log.replace(/^Timestamp: .+$/m, 'Timestamp: <timestamp>')
+}
 
 function createModel(overrides: Partial<ProviderModelConfig> = {}): ProviderModelConfig {
   return {
