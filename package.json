@@ -1,19 +1,60 @@
 {
-  "name": "pi-requesty",
-  "version": "0.2.7",
-  "description": "The official Requesty extension for the Pi Coding Agent",
+  "name": "pi-requesty-discover",
+  "version": "1.0.0",
+  "description": "Discover available Requesty models for the Pi Coding Agent",
   "type": "module",
-  "main": "requesty.js",
-  "keywords": ["pi-package", "pi", "pi-coding-agent", "pi-extensions", "requesty", "openai-compatible", "models"],
+  "main": "src/index.ts",
+  "keywords": [
+    "pi-package",
+    "pi",
+    "pi-coding-agent",
+    "pi-extensions",
+    "requesty",
+    "openai-compatible",
+    "models"
+  ],
+  "scripts": {
+    "agent-lint": "agnix . -v",
+    "format:check": "prettier --check src extensions test",
+    "format": "prettier --write src extensions test",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:unit": "vitest run src",
+    "test:integration": "vitest run test/integration.test.ts",
+    "test:watch": "vitest"
+  },
   "license": "MIT",
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "*"
   },
   "pi": {
-    "extensions": ["./requesty.js"]
+    "extensions": [
+      "./extensions/requesty-models-discover.ts"
+    ]
   },
   "files": [
-    "requesty.js",
-    "README.md"
-  ]
+    "src",
+    "extensions",
+    "tsconfig.json",
+    "README.adoc",
+    "LICENSE"
+  ],
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^26.1.0",
+    "@vitest/coverage-v8": "^4.1.9",
+    "agnix": "^0.37.0",
+    "eslint": "^10.6.0",
+    "globals": "^17.7.0",
+    "jiti": "^2.7.0",
+    "msw": "^2.14.6",
+    "prettier": "^3.9.4",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.62.1",
+    "vitest": "^4.1.9"
+  },
+  "dependencies": {
+    "zod": "^4.4.3"
+  }
 }

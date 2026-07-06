@@ -1,0 +1,80 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`argument completions > returns dry-run option for empty prefix 1`] = `
+[
+  {
+    "description": "Preview without writing into the new model.json file",
+    "label": "--dry-run",
+    "value": "--dry-run",
+  },
+]
+`;
+
+exports[`argument completions > returns dry-run option for matching prefix 1`] = `
+[
+  {
+    "description": "Preview without writing into the new model.json file",
+    "label": "--dry-run",
+    "value": "--dry-run",
+  },
+]
+`;
+
+exports[`command flow > does not update models.json and notifies error on full error 1`] = `
+[
+  {
+    "message": "requesty-discover: Discovered 2 Requesty model(s).
+Health check summary.
+Full health check log: /tmp/pi-requesty-home/.pi/agent/requesty-health-check.log
+models.json was not updated.",
+    "type": "error",
+  },
+]
+`;
+
+exports[`command flow > emits notification and does not update models.json on dry-run 1`] = `
+[
+  {
+    "message": "requesty-discover: running in dry mode, no changes will be done",
+    "type": undefined,
+  },
+  {
+    "message": "requesty-discover: Discovered 1 Requesty model(s).
+models.json was not updated.",
+    "type": "info",
+  },
+]
+`;
+
+exports[`command flow > notifies full error and clears status 1`] = `
+[
+  {
+    "message": "requesty-discover: Discovery failed: models.json exploded",
+    "type": "error",
+  },
+]
+`;
+
+exports[`command flow > updates models.json and notifies info on no failures 1`] = `
+[
+  {
+    "message": "requesty-discover: Discovered 2 Requesty model(s).
+Health check summary.
+Full health check log: /tmp/pi-requesty-home/.pi/agent/requesty-health-check.log
+Run /reload to use models.json changes.",
+    "type": "info",
+  },
+]
+`;
+
+exports[`command flow > updates passing models and notifies warning on partial failures 1`] = `
+[
+  {
+    "message": "requesty-discover: Discovered 2 Requesty model(s).
+Health check summary.
+Full health check log: /tmp/pi-requesty-home/.pi/agent/requesty-health-check.log
+Run /reload to use models.json changes.",
+    "type": "warning",
+  },
+]
+`;

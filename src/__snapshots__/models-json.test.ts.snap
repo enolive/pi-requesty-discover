@@ -1,0 +1,29 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`updateModelsJson > writes models into selected provider 1`] = `
+{
+  "providers": {
+    "requesty-export": {
+      "apiKey": "models-json-key",
+      "models": [
+        {
+          "contextWindow": 128000,
+          "cost": {
+            "cacheRead": 3,
+            "cacheWrite": 4,
+            "input": 1,
+            "output": 2,
+          },
+          "id": "requesty/model-a",
+          "input": [
+            "text",
+          ],
+          "maxTokens": 4096,
+          "name": "Model A",
+          "reasoning": false,
+        },
+      ],
+    },
+  },
+}
+`;

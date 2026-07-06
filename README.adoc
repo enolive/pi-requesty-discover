@@ -1,0 +1,106 @@
+= pi-requesty-discover
+
+This extension helps you discover currently available models in requesty.ai for your Pi Coding Agent.
+
+This is a fork of https://github.com/requestyai/pi-requesty[pi-requesty] with additional features:
+
+* Use `REQUESTY_API_KEY` from the environment
+* Health-check available models and write a log about them
+* Provide a dry-run mode that does not change anything
+
+== Recommended install from GitHub repo
+
+[source,bash]
+----
+pi install git:github.com/enolive/pi-requesty-discover
+----
+
+== Install locally
+
+Check out the code from the official code repository `https://github.com/enolive/pi-requesty-discover`, and then:
+
+[source,bash]
+----
+pi install ./pi-requesty-discover
+----
+
+To run once without installing:
+
+[source,bash]
+----
+pi -e ./pi-requesty-discover
+----
+
+== Configuration
+
+The extension reads the `requesty-export` provider from `~/.pi/agent/models.json`.
+You can override the provider id with the `REQUESTY_PROVIDER_ID` variable.
+
+Example:
+
+[source,json]
+----
+{
+  "providers": {
+    "requesty-export": {
+      "name": "Requesty",
+      "baseUrl": "https://router.requesty.ai/v1",
+      "apiKey": "rqsty-sk-...",
+      "api": "openai-completions",
+      "models": []
+    }
+  }
+}
+----
+
+IMPORTANT: The `apiKey` from `models.json` is not used by this extension.
+It may contain Pi-specific environment-variable substitution that the extension cannot reliably resolve.
+Set `REQUESTY_API_KEY` instead. This variable is required.
+
+IMPORTANT: Health checks are designed to use only a few tokens, but they still make real Requesty API calls and may consume credits.
+
+On startup, the extension fetches `<baseUrl>/models` using `REQUESTY_API_KEY` as the bearer token and registers discovered and healthy models with Pi.
+
+=== Environment variables
+
+[cols="1,1,1,1,2", options="header"]
+|===
+| Name | Required | Type | Default | Meaning
+
+| `REQUESTY_API_KEY`
+| yes
+| `string`
+|
+| Requesty API key used for model discovery and health checks.
+
+| `REQUESTY_PROVIDER_ID`
+| no
+| `string`
+| `requesty-export`
+| The id of the provider.
+
+| `REQUESTY_HEALTH_CHECK_MODE`
+| no
+| `off`, `basic`, `full`
+| `full`
+| The health-check mode.
+|===
+
+== Command
+
+Inside Pi:
+
+[source,text]
+----
+/requesty-discover
+----
+
+The command fetches Requesty models using `~/.pi/agent/models.json` and writes the discovered model IDs back to the same file.
+Run `/reload` after syncing.
+
+[source,text]
+----
+/requesty-discover --dry-run
+----
+
+This will not overwrite the `models.json` file, but will do everything else, including the health checks.
