@@ -63,9 +63,7 @@ describe('getRequestyConfig', () => {
 
     const readConfig = () => getRequestyConfig(envConfig)
 
-    expect(readConfig).toThrow(
-      `${envConfig.models_json_path} does not define providers.requesty-export`,
-    )
+    expect(readConfig).toThrow(`${envConfig.models_json_path} does not define providers.requesty-export`)
   })
 
   it('reads provider config from models.json', async () => {

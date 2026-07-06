@@ -1,8 +1,4 @@
-import type {
-  ExtensionAPI,
-  ExtensionCommandContext,
-  RegisteredCommand,
-} from '@earendil-works/pi-coding-agent'
+import type { ExtensionAPI, ExtensionCommandContext, RegisteredCommand } from '@earendil-works/pi-coding-agent'
 
 type NotificationType = 'info' | 'warning' | 'error'
 type RegisteredCommandOptions = Omit<RegisteredCommand, 'name' | 'sourceInfo'>
