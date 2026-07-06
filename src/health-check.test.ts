@@ -19,6 +19,8 @@ const PROVIDER: Provider = {
   apiKey: 'test-key',
 }
 
+const completionsEndpoint = 'https://router.requesty.ai/v1/chat/completions'
+
 const CHAT_BODY = {
   model: 'requesty/test-model',
   messages: [{ role: 'user', content: 'Say OK' }],
@@ -29,7 +31,7 @@ const positiveResponse = { choices: [{ message: { role: 'assistant', content: 'O
 describe('postChatCompletion', () => {
   it('returns ok for response with non-empty choices', async () => {
     server.use(
-      http.post('https://router.requesty.ai/v1/chat/completions', () => {
+      http.post(completionsEndpoint, () => {
         return HttpResponse.json(positiveResponse)
       }),
     )
@@ -41,7 +43,7 @@ describe('postChatCompletion', () => {
 
   it('returns failure for HTTP error', async () => {
     server.use(
-      http.post('https://router.requesty.ai/v1/chat/completions', () => {
+      http.post(completionsEndpoint, () => {
         return HttpResponse.text('bad gateway', {
           status: 502,
           statusText: 'Bad Gateway',
@@ -59,7 +61,7 @@ describe('postChatCompletion', () => {
 
   it('returns failure for empty choices', async () => {
     server.use(
-      http.post('https://router.requesty.ai/v1/chat/completions', () => {
+      http.post(completionsEndpoint, () => {
         return HttpResponse.json({ choices: [] })
       }),
     )
@@ -74,7 +76,7 @@ describe('postChatCompletion', () => {
 
   it('returns failure for malformed response', async () => {
     server.use(
-      http.post('https://router.requesty.ai/v1/chat/completions', () => {
+      http.post(completionsEndpoint, () => {
         return HttpResponse.json({ choices: 'not-an-array' })
       }),
     )
@@ -90,7 +92,7 @@ describe('postChatCompletion', () => {
   it('sends bearer token', async () => {
     let authorizationHeader: string | null = null
     server.use(
-      http.post('https://router.requesty.ai/v1/chat/completions', ({ request }) => {
+      http.post(completionsEndpoint, ({ request }) => {
         authorizationHeader = request.headers.get('authorization')
         return HttpResponse.json(positiveResponse)
       }),
@@ -104,7 +106,7 @@ describe('postChatCompletion', () => {
   it('sends model in request body', async () => {
     let requestBody: unknown
     server.use(
-      http.post('https://router.requesty.ai/v1/chat/completions', async ({ request }) => {
+      http.post(completionsEndpoint, async ({ request }) => {
         requestBody = await request.json()
         return HttpResponse.json(positiveResponse)
       }),
@@ -118,7 +120,7 @@ describe('postChatCompletion', () => {
   it('retries timeout failures', async () => {
     let requestCount = 0
     server.use(
-      http.post('https://router.requesty.ai/v1/chat/completions', async () => {
+      http.post(completionsEndpoint, async () => {
         requestCount++
         await delay(50)
         return HttpResponse.json(positiveResponse)
@@ -141,7 +143,7 @@ describe('postChatCompletion', () => {
   it('retries timeout failures without delay', async () => {
     let requestCount = 0
     server.use(
-      http.post('https://router.requesty.ai/v1/chat/completions', async () => {
+      http.post(completionsEndpoint, async () => {
         requestCount++
         await delay(50)
         return HttpResponse.json(positiveResponse)
@@ -163,7 +165,6 @@ describe('postChatCompletion', () => {
 })
 
 describe('checkModels', () => {
-  const completionsEndpoint = 'https://router.requesty.ai/v1/chat/completions'
   it('calls basic completion check once per model', async () => {
     const requestBodies: unknown[] = []
     server.use(

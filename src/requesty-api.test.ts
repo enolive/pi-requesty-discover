@@ -8,6 +8,8 @@ const providerConfig = {
   apiKey: 'test-key',
 }
 
+const modelsEndpoint = 'https://router.requesty.ai/v1/models'
+
 function modelsResponse(data: unknown[]) {
   return HttpResponse.json({ data })
 }
@@ -17,7 +19,7 @@ describe('discoverModels', () => {
     const models: RequestyModel[] = [{ id: 'Provider 1' }, { id: 'Provider 2' }]
 
     server.use(
-      http.get('https://router.requesty.ai/v1/models', () => {
+      http.get(modelsEndpoint, () => {
         return modelsResponse(models)
       }),
     )
@@ -33,7 +35,7 @@ describe('discoverModels', () => {
     let authorizationHeader: string | null = null
 
     server.use(
-      http.get('https://router.requesty.ai/v1/models', ({ request }) => {
+      http.get(modelsEndpoint, ({ request }) => {
         authorizationHeader = request.headers.get('authorization')
         return modelsResponse([])
       }),
@@ -46,7 +48,7 @@ describe('discoverModels', () => {
 
   it('throws on HTTP error', async () => {
     server.use(
-      http.get('https://router.requesty.ai/v1/models', () => {
+      http.get(modelsEndpoint, () => {
         return HttpResponse.json({ error: 'Requesty unavailable' }, { status: 503, statusText: 'Service Unavailable' })
       }),
     )
@@ -58,7 +60,7 @@ describe('discoverModels', () => {
 
   it('validates malformed response', async () => {
     server.use(
-      http.get('https://router.requesty.ai/v1/models', () => {
+      http.get(modelsEndpoint, () => {
         return HttpResponse.json({ data: {} })
       }),
     )
@@ -70,7 +72,7 @@ describe('discoverModels', () => {
 
   it('skips invalid model entries', async () => {
     server.use(
-      http.get('https://router.requesty.ai/v1/models', () => {
+      http.get(modelsEndpoint, () => {
         return modelsResponse([
           { id: 'requesty/valid-model', name: 'Valid Model' },
           { id: '' },
@@ -88,7 +90,7 @@ describe('discoverModels', () => {
 
   it('maps Requesty model fields', async () => {
     server.use(
-      http.get('https://router.requesty.ai/v1/models', () => {
+      http.get(modelsEndpoint, () => {
         return modelsResponse([
           {
             id: 'requesty/mapped-model',
@@ -128,7 +130,7 @@ describe('discoverModels', () => {
 
   it('uses defaults for optional Requesty model fields', async () => {
     server.use(
-      http.get('https://router.requesty.ai/v1/models', () => {
+      http.get(modelsEndpoint, () => {
         return modelsResponse([{ id: 'requesty/default-model' }])
       }),
     )
