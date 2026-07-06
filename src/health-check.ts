@@ -67,9 +67,8 @@ export async function checkModels(
   await new Promise<void>(resolve => {
     function next() {
       while (active < healthCheckOptions.concurrency && queue.length > 0) {
-        const model = queue.shift()
-        if (!model) continue
-
+        // note: due to the single-threaded nature of JS, race conditions are not possible here
+        const model = queue.shift()!
         active++
         void checkModel(provider, model, checkReasoning, healthCheckOptions).then(result => {
           const healthCheckResult = { modelId: model.id, ...result }

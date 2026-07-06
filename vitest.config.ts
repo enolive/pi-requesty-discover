@@ -7,7 +7,7 @@ export default defineConfig({
     restoreMocks: true,
     clearMocks: true,
     coverage: {
-      reporter: ['text', 'json-summary', 'json'],
+      reporter: ['text', 'json-summary', 'json', 'html'],
       reportOnFailure: true,
     },
   },

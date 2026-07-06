@@ -59,6 +59,57 @@ describe('postChatCompletion', () => {
     })
   })
 
+  it('returns failure for HTTP with empty response body', async () => {
+    server.use(
+      http.post(completionsEndpoint, () => {
+        return HttpResponse.text('', {
+          status: 502,
+          statusText: 'Bad Gateway',
+        })
+      }),
+    )
+
+    const result = await postChatCompletion(PROVIDER, CHAT_BODY)
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: 'HTTP 502 Bad Gateway',
+    })
+  })
+
+  it('returns failure when response body cannot be read', async () => {
+    server.use(
+      http.post(completionsEndpoint, () => {
+        const stream = new ReadableStream({
+          start(controller) {
+            controller.error(new Error('body stream errored'))
+          },
+        })
+        return new Response(stream, { status: 502, statusText: 'Bad Gateway' })
+      }),
+    )
+
+    const result = await postChatCompletion(PROVIDER, CHAT_BODY)
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: 'HTTP 502 Bad Gateway',
+    })
+  })
+
+  it('returns failure when successful response body is not valid JSON', async () => {
+    server.use(
+      http.post(completionsEndpoint, () => {
+        return HttpResponse.text('not json', { status: 200, statusText: 'OK' })
+      }),
+    )
+
+    const result = await postChatCompletion(PROVIDER, CHAT_BODY)
+
+    expect(result.ok).toBe(false)
+    expect(result.error).toMatch(/SyntaxError/)
+  })
+
   it('returns failure for empty choices', async () => {
     server.use(
       http.post(completionsEndpoint, () => {
@@ -424,6 +475,10 @@ describe('health summary and log output', () => {
         modelId: 'requesty/failing-model',
         ok: false,
         error: 'HTTP 500 Internal Server Error',
+      }),
+      createHealthCheckResult({
+        modelId: 'requesty/failing-model-unknown-error',
+        ok: false,
       }),
     ]
 

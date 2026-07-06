@@ -55,6 +55,24 @@ exports[`command flow > notifies full error and clears status 1`] = `
 ]
 `;
 
+exports[`command flow > notifies full error for sth not deriving from Error 1`] = `
+[
+  {
+    "message": "requesty-discover: Discovery failed: this is not an error",
+    "type": "error",
+  },
+]
+`;
+
+exports[`command flow > notifies full error on async rejections 1`] = `
+[
+  {
+    "message": "requesty-discover: Discovery failed: requesty has a bad day trying to read its models",
+    "type": "error",
+  },
+]
+`;
+
 exports[`command flow > updates models.json and notifies info on no failures 1`] = `
 [
   {
