@@ -4,33 +4,39 @@ Development notes for coding agents working on this repository.
 
 ## Project overview
 
-*pi-requesty* is a Pi Coding Agent extension for syncing Requesty models into Pi's local *models.json*.
+*pi-requesty-discover* is a Pi Coding Agent package/extension for discovering available Requesty models, optionally health-checking them, and updating Pi's local *models.json*.
 
-Pi loads the extension directly from TypeScript:
+Pi loads the extension directly from TypeScript through the package manifest:
 
 ```json
 {
   "main": "src/index.ts",
   "pi": {
     "extensions": [
-      "./src/index.ts"
+      "./extensions/requesty-models-discover.ts"
     ]
   }
 }
 ```
 
+`extensions/requesty-models-discover.ts` is a small public entrypoint that re-exports the implementation from `src/index.ts`, so installed-package provenance displays a useful path. Keep the implementation in `src/` unless there is a good reason to change the package entrypoint.
+
 Do **not** add a build/transpile step unless explicitly requested.
 
 ## Source layout
 
-```text
-src/
-├── index.ts          # Pi command registration and high-level command flow
-├── env.ts            # Environment variables and paths to pi
-├── models-json.ts    # Read/validate/update models.json
-├── requesty-api.ts   # Requesty models library API
-└── health-check.ts   # Model health checks and health-check log writing
-```
+- extensions/
+  - requesty-models-discover.ts — package-facing Pi extension entrypoint; re-exports src/index.ts
+- src/
+  - index.ts — Pi command registration and high-level command flow
+  - env.ts — environment variables and paths to Pi
+  - models-json.ts — read/validate/update models.json
+  - requesty-api.ts — Requesty models library API
+  - health-check.ts — model health checks and health-check log writing
+  - *.test.ts — unit tests colocated with source files
+- test/
+  - integration.test.ts — integration tests
+  - helpers/ — integration test helpers
 
 ## Conventions
 
@@ -73,11 +79,14 @@ Published files are controlled by `package.json`:
 {
   "files": [
     "src",
+    "extensions",
     "tsconfig.json",
-    "README.md",
+    "README.adoc",
     "LICENSE"
   ]
 }
 ```
 
 If adding required runtime files, update `files` accordingly.
+
+Runtime dependencies belong in `dependencies`; development-only tools belong in `devDependencies`. Pi-provided packages such as `@earendil-works/pi-coding-agent` should stay in `peerDependencies` with a `"*"` range.
