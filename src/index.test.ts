@@ -19,8 +19,8 @@ type LoadExtensionOptions = {
   healthCheckMode?: HealthCheckMode
   models?: ProviderModelConfig[]
   healthResults?: HealthCheckResult[]
-  getRequestyConfigError?: Error
-  discoverModelsError?: Error
+  getRequestyConfigError?: unknown
+  discoverModelsError?: unknown
 }
 
 const COMMAND_NAME = 'requesty-discover'
@@ -162,6 +162,28 @@ describe('command flow', () => {
     expect(notifications).toMatchSnapshot()
     expect(statuses.at(-1)).toEqual({ key: COMMAND_NAME, text: undefined })
     expectAllNotificationsPrefixed(notifications)
+  })
+
+  it('notifies full error for sth not deriving from Error', async () => {
+    const { command } = await loadExtension({
+      getRequestyConfigError: 'this is not an error',
+    })
+    const { ctx, notifications } = createFakeCommandContext()
+
+    await command.handler('', ctx)
+
+    expect(notifications).toMatchSnapshot()
+  })
+
+  it('notifies full error on async rejections', async () => {
+    const { command } = await loadExtension({
+      discoverModelsError: new Error('requesty has a bad day trying to read its models'),
+    })
+    const { ctx, notifications } = createFakeCommandContext()
+
+    await command.handler('', ctx)
+
+    expect(notifications).toMatchSnapshot()
   })
 
   it('sets progress status while checking models', async () => {

@@ -6,5 +6,9 @@ export default defineConfig({
     setupFiles: ['./test/setup.ts'],
     restoreMocks: true,
     clearMocks: true,
+    coverage: {
+      reporter: ['text', 'json-summary', 'json', 'html'],
+      reportOnFailure: true,
+    },
   },
 })
