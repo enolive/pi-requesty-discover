@@ -8,7 +8,16 @@ This is a fork of https://github.com/requestyai/pi-requesty[pi-requesty] with ad
 * Health-check available models and write a log about them
 * Provide a dry-run mode that does not change anything
 
-== Recommended install from GitHub repo
+== When and why use it
+
+Use this extension if
+
+- you are on Requesty.ai
+- you are limited to certain models by a company policy (for instance, for data residency/protection reasons)
+- you don't want to handcraft your own curated list of models constantly
+- you want to health check the list to complain about non-working models via a dry-run
+
+== Recommended Installation from GitHub repo
 
 [source,bash]
 ----
