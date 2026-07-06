@@ -32,4 +32,4 @@ export function getEnv(options?: { env?: NodeJS.ProcessEnv; homeDir?: string }):
   }
 }
 
-export default getEnv()
+export default getEnv

@@ -1,5 +1,5 @@
 import type { ExtensionAPI, ExtensionCommandContext, ProviderModelConfig } from '@earendil-works/pi-coding-agent'
-import env from './env'
+import { getEnv } from './env'
 import { getRequestyConfig, updateModelsJson } from './models-json'
 import { discoverModels } from './requesty-api'
 import { checkModels, formatHealthSummary, writeHealthCheckLog } from './health-check'
@@ -36,7 +36,8 @@ async function runCommand(args: string, ctx: ExtensionCommandContext): Promise<v
   }
 
   try {
-    const { data, provider } = getRequestyConfig()
+    const env = getEnv()
+    const { data, provider } = getRequestyConfig(env)
     const models = await discoverModels(provider)
     const modelsMap = new Map(models.map(m => [m.id, m]))
 
@@ -58,7 +59,7 @@ async function runCommand(args: string, ctx: ExtensionCommandContext): Promise<v
         return r.ok && model ? [model] : []
       })
       healthCheckSummary = formatHealthSummary(healthResults)
-      writeHealthCheckLog(env.health_check_log_path, provider, healthResults)
+      writeHealthCheckLog(env.health_check_log_path, provider, healthResults, env)
       logNote = `Full health check log: ${env.health_check_log_path}\n`
     } else {
       passing = models
@@ -66,7 +67,7 @@ async function runCommand(args: string, ctx: ExtensionCommandContext): Promise<v
 
     const shouldUpdate = passing.length > 0 && !dryRun
     if (shouldUpdate) {
-      updateModelsJson(data, passing)
+      updateModelsJson(data, passing, env)
     }
 
     const writeNote = shouldUpdate ? 'Run /reload to use models.json changes.' : 'models.json was not updated.'

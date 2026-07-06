@@ -106,7 +106,7 @@ describe('command flow', () => {
 
     await command.handler('', ctx)
 
-    expect(updateModelsJson).toHaveBeenCalledWith(modelsJson, models)
+    expect(updateModelsJson).toHaveBeenCalledWith(modelsJson, models, expect.any(Object))
     expect(notifications).toMatchSnapshot()
     expect(statuses.at(-1)).toEqual({ key: COMMAND_NAME, text: undefined })
     expectAllNotificationsPrefixed(notifications)
@@ -127,7 +127,7 @@ describe('command flow', () => {
 
     await command.handler('', ctx)
 
-    expect(updateModelsJson).toHaveBeenCalledWith(modelsJson, [passingModel])
+    expect(updateModelsJson).toHaveBeenCalledWith(modelsJson, [passingModel], expect.any(Object))
     expect(notifications).toMatchSnapshot()
     expect(statuses.at(-1)).toEqual({ key: COMMAND_NAME, text: undefined })
     expectAllNotificationsPrefixed(notifications)
@@ -222,10 +222,6 @@ async function loadExtension(options: LoadExtensionOptions = {}) {
   const formatHealthSummary = vi.mocked(HealthCheckModule.formatHealthSummary)
   formatHealthSummary.mockReturnValue('Health check summary.\n')
   const writeHealthCheckLog = vi.mocked(HealthCheckModule.writeHealthCheckLog)
-  const extension = await import('./index')
-  const { pi, commands } = createFakePi()
-  extension.default(pi)
-  const command = commands.get(COMMAND_NAME)
   const getEnv = vi.mocked(EnvModule.getEnv)
   getEnv.mockReturnValue({
     models_json_path: MODELS_JSON_PATH,
@@ -234,6 +230,11 @@ async function loadExtension(options: LoadExtensionOptions = {}) {
     requesty_api_key: undefined,
     health_check_mode: options.healthCheckMode ?? 'basic',
   })
+
+  const extension = await import('./index')
+  const { pi, commands } = createFakePi()
+  extension.default(pi)
+  const command = commands.get(COMMAND_NAME)
 
   if (!command) {
     throw new Error(`${COMMAND_NAME} was not registered`)

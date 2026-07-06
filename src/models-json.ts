@@ -2,7 +2,7 @@ import type { ProviderConfig, ProviderModelConfig } from '@earendil-works/pi-cod
 import fs from 'node:fs'
 import path from 'node:path'
 import { z } from 'zod'
-import env, { type Env } from './env'
+import { getEnv, type Env } from './env'
 
 const DEFAULT_BASE_URL = 'https://router.requesty.ai/v1'
 const DEFAULT_NAME = 'Requesty'
@@ -39,7 +39,7 @@ function normalizeBaseUrl(baseUrl: string): string {
   return baseUrl.replace(/\/+$/, '')
 }
 
-function readModelsJson(envConfig: Env = env): ModelsJson {
+function readModelsJson(envConfig: Env = getEnv()): ModelsJson {
   if (!fs.existsSync(envConfig.models_json_path)) {
     throw new Error(`${envConfig.models_json_path} does not exist`)
   }
@@ -54,7 +54,7 @@ function readModelsJson(envConfig: Env = env): ModelsJson {
   return result.data
 }
 
-export function getRequestyConfig(envConfig: Env = env): RequestyConfig {
+export function getRequestyConfig(envConfig: Env = getEnv()): RequestyConfig {
   const data = readModelsJson(envConfig)
   const provider = data.providers[envConfig.provider_id]
 
@@ -81,7 +81,7 @@ export function getRequestyConfig(envConfig: Env = env): RequestyConfig {
   }
 }
 
-export function updateModelsJson(data: ModelsJson, models: ProviderModelConfig[], envConfig: Env = env): void {
+export function updateModelsJson(data: ModelsJson, models: ProviderModelConfig[], envConfig: Env = getEnv()): void {
   data.providers[envConfig.provider_id] = {
     ...data.providers[envConfig.provider_id],
     models: models.map(model => ({
@@ -98,7 +98,7 @@ export function updateModelsJson(data: ModelsJson, models: ProviderModelConfig[]
   writeModelsJson(data, envConfig)
 }
 
-function writeModelsJson(data: ModelsJson, envConfig: Env = env): void {
+function writeModelsJson(data: ModelsJson, envConfig: Env = getEnv()): void {
   fs.mkdirSync(path.dirname(envConfig.models_json_path), { recursive: true })
   const tmpPath = `${envConfig.models_json_path}.tmp`
   fs.writeFileSync(tmpPath, `${JSON.stringify(data, null, 2)}\n`, 'utf8')
