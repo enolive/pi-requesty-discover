@@ -35,25 +35,6 @@ type RequestyConfig = {
   provider: RequestyProvider
 }
 
-function normalizeBaseUrl(baseUrl: string): string {
-  return baseUrl.replace(/\/+$/, '')
-}
-
-function readModelsJson(envConfig: Env = getEnv()): ModelsJson {
-  if (!fs.existsSync(envConfig.models_json_path)) {
-    throw new Error(`${envConfig.models_json_path} does not exist`)
-  }
-
-  const data = JSON.parse(fs.readFileSync(envConfig.models_json_path, 'utf8')) as unknown
-  const result = ModelsJsonSchema.safeParse(data)
-
-  if (!result.success) {
-    throw new Error(`${envConfig.models_json_path} is invalid: ${z.prettifyError(result.error)}`)
-  }
-
-  return result.data
-}
-
 export function getRequestyConfig(envConfig: Env = getEnv()): RequestyConfig {
   const data = readModelsJson(envConfig)
   const provider = data.providers[envConfig.provider_id]
@@ -96,6 +77,25 @@ export function updateModelsJson(data: ModelsJson, models: ProviderModelConfig[]
   } satisfies ProviderConfig
 
   writeModelsJson(data, envConfig)
+}
+
+function normalizeBaseUrl(baseUrl: string): string {
+  return baseUrl.replace(/\/+$/, '')
+}
+
+function readModelsJson(envConfig: Env = getEnv()): ModelsJson {
+  if (!fs.existsSync(envConfig.models_json_path)) {
+    throw new Error(`${envConfig.models_json_path} does not exist`)
+  }
+
+  const data = JSON.parse(fs.readFileSync(envConfig.models_json_path, 'utf8')) as unknown
+  const result = ModelsJsonSchema.safeParse(data)
+
+  if (!result.success) {
+    throw new Error(`${envConfig.models_json_path} is invalid: ${z.prettifyError(result.error)}`)
+  }
+
+  return result.data
 }
 
 function writeModelsJson(data: ModelsJson, envConfig: Env = getEnv()): void {

@@ -89,64 +89,6 @@ export async function checkModels(
   return results
 }
 
-async function checkModel(
-  provider: Provider,
-  model: ProviderModelConfig,
-  checkReasoning: boolean,
-  options: ResolvedHealthCheckOptions,
-): Promise<ModelCheckResult> {
-  const basicResult = await postChatCompletion(
-    provider,
-    {
-      model: model.id,
-      messages: [{ role: 'user', content: 'Say OK' }],
-      max_tokens: 16,
-    },
-    options,
-  )
-
-  if (!basicResult.ok || !model.reasoning || !checkReasoning) {
-    return basicResult
-  }
-
-  const reasoningResult = await postChatCompletion(
-    provider,
-    {
-      model: model.id,
-      messages: [{ role: 'user', content: 'Say OK. Do not call any tools.' }],
-      tools: [
-        {
-          type: 'function',
-          function: {
-            name: 'health_check_noop',
-            description: 'A no-op tool used only to verify tool compatibility during model health checks.',
-            parameters: {
-              type: 'object',
-              properties: {},
-              additionalProperties: false,
-            },
-          },
-        },
-      ],
-      reasoning_effort: 'low',
-    },
-    options,
-  )
-
-  if (!reasoningResult.ok) {
-    return {
-      ok: false,
-      latencyMs: reasoningResult.latencyMs,
-      error: `Reasoning/tool check failed: ${reasoningResult.error}`,
-    }
-  }
-
-  return {
-    ok: true,
-    latencyMs: basicResult.latencyMs + reasoningResult.latencyMs,
-  }
-}
-
 export function formatHealthSummary(results: HealthCheckResult[]): string {
   const passed = results.filter(r => r.ok)
   const failed = results.filter(r => !r.ok)
@@ -244,6 +186,64 @@ export async function postChatCompletion(
         ? `Timed out after ${attempts} attempt(s); per-attempt timeout is ${healthCheckOptions.timeoutMs / 1000}s`
         : String(err),
     }
+  }
+}
+
+async function checkModel(
+  provider: Provider,
+  model: ProviderModelConfig,
+  checkReasoning: boolean,
+  options: ResolvedHealthCheckOptions,
+): Promise<ModelCheckResult> {
+  const basicResult = await postChatCompletion(
+    provider,
+    {
+      model: model.id,
+      messages: [{ role: 'user', content: 'Say OK' }],
+      max_tokens: 16,
+    },
+    options,
+  )
+
+  if (!basicResult.ok || !model.reasoning || !checkReasoning) {
+    return basicResult
+  }
+
+  const reasoningResult = await postChatCompletion(
+    provider,
+    {
+      model: model.id,
+      messages: [{ role: 'user', content: 'Say OK. Do not call any tools.' }],
+      tools: [
+        {
+          type: 'function',
+          function: {
+            name: 'health_check_noop',
+            description: 'A no-op tool used only to verify tool compatibility during model health checks.',
+            parameters: {
+              type: 'object',
+              properties: {},
+              additionalProperties: false,
+            },
+          },
+        },
+      ],
+      reasoning_effort: 'low',
+    },
+    options,
+  )
+
+  if (!reasoningResult.ok) {
+    return {
+      ok: false,
+      latencyMs: reasoningResult.latencyMs,
+      error: `Reasoning/tool check failed: ${reasoningResult.error}`,
+    }
+  }
+
+  return {
+    ok: true,
+    latencyMs: basicResult.latencyMs + reasoningResult.latencyMs,
   }
 }
 

@@ -15,6 +15,15 @@ interface AutocompleteItem {
 
 type NotificationLevel = 'info' | 'warning' | 'error'
 
+// noinspection JSUnusedGlobalSymbols
+export default function (pi: ExtensionAPI) {
+  pi.registerCommand(COMMAND_NAME, {
+    description: 'Dynamically discover Requesty models, run health checks, and update the local models.json.',
+    getArgumentCompletions,
+    handler: runCommand,
+  })
+}
+
 function getArgumentCompletions(prefix: string): AutocompleteItem[] {
   const options = [
     {
@@ -85,15 +94,6 @@ async function runCommand(args: string, ctx: ExtensionCommandContext): Promise<v
   } finally {
     ctx.ui.setStatus(COMMAND_NAME, undefined)
   }
-}
-
-// noinspection JSUnusedGlobalSymbols
-export default function (pi: ExtensionAPI) {
-  pi.registerCommand(COMMAND_NAME, {
-    description: 'Dynamically discover Requesty models, run health checks, and update the local models.json.',
-    getArgumentCompletions,
-    handler: runCommand,
-  })
 }
 
 function notify(ctx: ExtensionCommandContext, message: string, level?: NotificationLevel): void {
