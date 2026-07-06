@@ -5,7 +5,7 @@ import { createFakeCommandContext, createFakePi } from './helpers/fake-pi'
 import { createTempDirectory, type TempDirectory } from './helpers/temp-agent'
 import { server } from './setup'
 
-const COMMAND_NAME = 'requesty-models-sync'
+const COMMAND_NAME = 'requesty-models-discover'
 const BASE_URL = 'https://router.requesty.ai/v1'
 const API_KEY = 'test-key'
 

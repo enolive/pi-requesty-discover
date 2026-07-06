@@ -23,7 +23,7 @@ type LoadExtensionOptions = {
   discoverModelsError?: Error
 }
 
-const COMMAND_NAME = 'requesty-models-sync'
+const COMMAND_NAME = 'requesty-models-discover'
 const MODELS_JSON_PATH = '/tmp/pi-requesty-home/.pi/agent/models.json'
 const HEALTH_CHECK_LOG_PATH = '/tmp/pi-requesty-home/.pi/agent/requesty-health-check.log'
 

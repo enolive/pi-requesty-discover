@@ -4,7 +4,7 @@ import { getRequestyConfig, updateModelsJson } from './models-json'
 import { discoverModels } from './requesty-api'
 import { checkModels, formatHealthSummary, writeHealthCheckLog } from './health-check'
 
-const COMMAND_NAME = 'requesty-models-sync'
+const COMMAND_NAME = 'requesty-models-discover'
 const DRY_RUN_ARG = '--dry-run'
 
 interface AutocompleteItem {
