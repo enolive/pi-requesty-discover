@@ -22,7 +22,7 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v6
         with:
-          node-version: lts/24
+          node-version: 22
           cache: npm
       - run: npm ci
       - run: npm run format:check
@@ -58,7 +58,7 @@ jobs:
       - name: 'Install Node'
         uses: actions/setup-node@v6
         with:
-          node-version: lts/24
+          node-version: 22
       - run: npm ci
       - run: npm run test:unit:coverage
       - name: 'Report Coverage'
