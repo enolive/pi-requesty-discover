@@ -14,5 +14,5 @@
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true
   },
-  "include": ["src/**/*.ts", "test/**/*.ts", "vitest.config.ts", "eslint.config.ts"]
+  "include": ["src/**/*.ts", "extensions/**/*.ts", "test/**/*.ts", "vitest.config.ts", "eslint.config.ts"]
 }
