@@ -5,9 +5,8 @@ import { createFakeCommandContext, createFakePi } from './helpers/fake-pi'
 import { createTempDirectory, type TempDirectory } from './helpers/temp-agent'
 import { server } from './setup'
 
-const COMMAND_NAME = 'requesty-models-discover'
+const COMMAND_NAME = 'requesty-discover'
 const BASE_URL = 'https://router.requesty.ai/v1'
-const API_KEY = 'test-key'
 
 let tempDirectory: TempDirectory
 
@@ -18,8 +17,8 @@ beforeEach(async () => {
       models_json_path: tempDirectory?.modelsJsonPath,
       health_check_log_path: tempDirectory?.healthCheckLogPath,
       provider_id: 'requesty-export',
-      requesty_api_key: undefined,
-      health_check_mode: 'basic',
+      requesty_api_key: 'test-api-key-from-env',
+      health_check_mode: 'full',
     }),
   }))
 })
@@ -30,11 +29,14 @@ afterEach(async () => {
   await tempDirectory.clean()
 })
 
-describe('requesty-models-sync integration', () => {
+describe('requesty-models-discover integration', () => {
+  const usedAuthKeys: string[] = []
+
   it('syncs a passing Requesty model into a temp models.json', async () => {
     await writeInitialModelsJson(tempDirectory.modelsJsonPath)
     server.use(
-      http.get(`${BASE_URL}/models`, () => {
+      http.get(`${BASE_URL}/models`, ({ request }) => {
+        usedAuthKeys.push(request.headers.get('authorization') ?? '')
         return HttpResponse.json({
           data: [
             {
@@ -64,7 +66,8 @@ describe('requesty-models-sync integration', () => {
           ],
         })
       }),
-      http.post(`${BASE_URL}/chat/completions`, () => {
+      http.post(`${BASE_URL}/chat/completions`, ({ request }) => {
+        usedAuthKeys.push(request.headers.get('authorization') ?? '')
         return HttpResponse.json({
           choices: [
             {
@@ -86,6 +89,13 @@ describe('requesty-models-sync integration', () => {
 
     await command!.handler('', ctx)
 
+    // four HTTP calls total:
+    // 1: read models
+    // 2: health check basic model
+    // 3+4: health check model with reasoning
+    expect(usedAuthKeys).toHaveLength(4)
+    const uniqueAuthKeys = [...new Set(usedAuthKeys)]
+    expect(uniqueAuthKeys).toEqual(['Bearer test-api-key-from-env'])
     const modelsJson = await readJson(tempDirectory.modelsJsonPath)
     expect(modelsJson).toMatchSnapshot()
     const healthCheckLog = await fs.readFile(tempDirectory.healthCheckLogPath, 'utf8')
@@ -108,7 +118,7 @@ async function writeInitialModelsJson(modelsJsonPath: string): Promise<void> {
           'requesty-export': {
             name: 'Requesty',
             baseUrl: BASE_URL,
-            apiKey: API_KEY,
+            apiKey: 'api-key-from-models-json-will-be-ignored',
             api: 'openai-completions',
             models: [],
           },

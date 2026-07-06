@@ -2,7 +2,7 @@
 
 This extension helps you to discover currently available models in requesty.ai for your Pi Coding Agent.
 
-this is a fork of [pi-requesty](https://github.com/requestyai/pi-requesty) with additional features
+This is a fork of [pi-requesty](https://github.com/requestyai/pi-requesty) with additional features
 
 - use `REQUESTY_API_KEY` from the environment
 - health check available models and write a log about them
@@ -11,7 +11,7 @@ this is a fork of [pi-requesty](https://github.com/requestyai/pi-requesty) with 
 ## (Recommended) Install from GitHub Repo
 
 ```bash
-pi install git:github.com/enolive/pi-requesty-export
+pi install git:github.com/enolive/pi-requesty-discover
 ```
 
 ## Install locally
@@ -50,19 +50,23 @@ Example:
 }
 ```
 
-If your `models.json` is getting the apiKey from an environment variable, you won't be able to obtain it for this
-plugin. Set the `REQUESTY_API_KEY` variable instead.
+> [!IMPORTANT]
+> The apiKey from the `models.json` cannot be reliably used as it might be substituted with an env var.
+> Therefore, setting the `REQUESTY_API_KEY` variable is required.
 
-On startup, the extension fetches `<baseUrl>/models` using `apiKey` as the bearer token and registers discovered models
-with pi.
+> [!IMPORTANT]
+> While the health check is set up to only use a few tokens, it will ultimately use them.
+
+On startup, the extension fetches `<baseUrl>/models` using the API Key as the bearer token and registers discovered
+and healthy models with pi.
 
 ### Environment variables
 
-| name                       | type                             | default           | meaning                               |
-|----------------------------|----------------------------------|-------------------|---------------------------------------|
-| REQUESTY_API_KEY           | `string`                         |                   | override the apiKey set in the config |
-| REQUESTY_PROVIDER_ID       | `string`                         | `requesty-export` | the id of the provider.               | 
-| REQUESTY_HEALTH_CHECK_MODE | `off` <br/> `basic` <br/> `full` | `full`            | the health check mode.                | 
+| name                       | required | type                             | default           | meaning                               |
+|----------------------------|----------|----------------------------------|-------------------|---------------------------------------|
+| REQUESTY_API_KEY           | yes      | `string`                         |                   | override the apiKey set in the config |
+| REQUESTY_PROVIDER_ID       | no       | `string`                         | `requesty-export` | the id of the provider.               | 
+| REQUESTY_HEALTH_CHECK_MODE | no       | `off` <br/> `basic` <br/> `full` | `full`            | the health check mode.                | 
 
 ## Command
 

@@ -44,16 +44,25 @@ describe('getRequestyConfig', () => {
     expect(readConfig).toThrow(`${envConfig.models_json_path} is invalid`)
   })
 
-  it('throws if API key is missing from models.json and env', async () => {
+  it('throws if API key is missing from env', async () => {
     const envConfig = await createEnvWithModelsJson(tempDirectory, {
       providers: { 'requesty-export': {} },
     })
+    const envConfigWithoutApiKey = { ...envConfig, requesty_api_key: undefined }
 
-    const readConfig = () => getRequestyConfig(envConfig)
+    const readConfig = () => getRequestyConfig(envConfigWithoutApiKey)
 
-    expect(readConfig).toThrow(
-      `providers.requesty-export.apiKey must be set in ${envConfig.models_json_path} or via REQUESTY_API_KEY env var`,
-    )
+    expect(readConfig).toThrow(`apiKey must be set via REQUESTY_API_KEY env var`)
+  })
+
+  it('ignores apiKey from models.json no matter what it is as it is unreliable due to env substitution and other things', async () => {
+    const envConfig = await createEnvWithModelsJson(tempDirectory, {
+      providers: { 'requesty-export': { apiKey: `these-are-not-the-druids-you-are-looking-for` } },
+    })
+
+    const config = getRequestyConfig(envConfig)
+
+    expect(config.provider.apiKey).toEqual(envConfig.requesty_api_key)
   })
 
   it('throws if configured provider is missing', async () => {
@@ -64,26 +73,6 @@ describe('getRequestyConfig', () => {
     const readConfig = () => getRequestyConfig(envConfig)
 
     expect(readConfig).toThrow(`${envConfig.models_json_path} does not define providers.requesty-export`)
-  })
-
-  it('reads provider config from models.json', async () => {
-    const envConfig = await createEnvWithModelsJson(tempDirectory, {
-      providers: {
-        'requesty-export': {
-          name: 'Custom Requesty',
-          baseUrl: 'https://example.com/v1',
-          apiKey: 'models-json-key',
-        },
-      },
-    })
-
-    const config = getRequestyConfig(envConfig)
-
-    expect(config.provider).toMatchObject({
-      name: 'Custom Requesty',
-      baseUrl: 'https://example.com/v1',
-      apiKey: 'models-json-key',
-    })
   })
 
   it('env API key override wins over models.json', async () => {
@@ -222,7 +211,7 @@ function createTestEnv(tempDirectory: TempDirectory): Env {
     models_json_path: tempDirectory.modelsJsonPath,
     health_check_log_path: tempDirectory.healthCheckLogPath,
     provider_id: 'requesty-export',
-    requesty_api_key: undefined,
+    requesty_api_key: 'test-api-key',
     health_check_mode: 'full',
   }
 }

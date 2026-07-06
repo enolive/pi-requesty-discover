@@ -1,11 +1,11 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`requesty-models-sync integration > syncs a passing Requesty model into a temp models.json 1`] = `
+exports[`requesty-models-discover integration > syncs a passing Requesty model into a temp models.json 1`] = `
 {
   "providers": {
     "requesty-export": {
       "api": "openai-completions",
-      "apiKey": "test-key",
+      "apiKey": "api-key-from-models-json-will-be-ignored",
       "baseUrl": "https://router.requesty.ai/v1",
       "models": [
         {

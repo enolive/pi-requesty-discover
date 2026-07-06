@@ -43,12 +43,10 @@ export function getRequestyConfig(envConfig: Env = getEnv()): RequestyConfig {
     throw new Error(`${envConfig.models_json_path} does not define providers.${envConfig.provider_id}`)
   }
 
-  const apiKey = envConfig.requesty_api_key || nonEmptyString(provider.apiKey)
+  const apiKey = envConfig.requesty_api_key
 
   if (!apiKey) {
-    throw new Error(
-      `providers.${envConfig.provider_id}.apiKey must be set in ${envConfig.models_json_path} or via REQUESTY_API_KEY env var`,
-    )
+    throw new Error(`apiKey must be set via REQUESTY_API_KEY env var`)
   }
 
   return {
