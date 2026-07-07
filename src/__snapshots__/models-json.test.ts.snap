@@ -1,5 +1,65 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
+exports[`updateModelsJson > keeps a deterministic order based on the model id 1`] = `
+{
+  "providers": {
+    "requesty-export": {
+      "apiKey": "models-json-key",
+      "models": [
+        {
+          "contextWindow": 128000,
+          "cost": {
+            "cacheRead": 3,
+            "cacheWrite": 4,
+            "input": 1,
+            "output": 2,
+          },
+          "id": "requesty/model-a",
+          "input": [
+            "text",
+          ],
+          "maxTokens": 4096,
+          "name": "Model A",
+          "reasoning": false,
+        },
+        {
+          "contextWindow": 128000,
+          "cost": {
+            "cacheRead": 3,
+            "cacheWrite": 4,
+            "input": 1,
+            "output": 2,
+          },
+          "id": "requesty/model-b",
+          "input": [
+            "text",
+          ],
+          "maxTokens": 4096,
+          "name": "Model B",
+          "reasoning": false,
+        },
+        {
+          "contextWindow": 128000,
+          "cost": {
+            "cacheRead": 3,
+            "cacheWrite": 4,
+            "input": 1,
+            "output": 2,
+          },
+          "id": "requesty/model-c",
+          "input": [
+            "text",
+          ],
+          "maxTokens": 4096,
+          "name": "Model C",
+          "reasoning": false,
+        },
+      ],
+    },
+  },
+}
+`;
+
 exports[`updateModelsJson > writes models into selected provider 1`] = `
 {
   "providers": {

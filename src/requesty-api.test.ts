@@ -120,7 +120,7 @@ describe('discoverModels', () => {
           input: 1,
           output: 2,
           cacheRead: 0.3,
-          cacheWrite: 0.39999999999999997,
+          cacheWrite: 0.4,
         },
         contextWindow: 200000,
         maxTokens: 8192,
@@ -153,5 +153,31 @@ describe('discoverModels', () => {
         maxTokens: 4096,
       },
     ])
+  })
+
+  it('rounds prices to 2 decimal places', async () => {
+    server.use(
+      http.get(modelsEndpoint, () => {
+        return modelsResponse([
+          {
+            id: 'requesty/rounded-down',
+            input_price: 0.0000012341,
+            output_price: 0.0000012345,
+          },
+          {
+            id: 'requesty/rounded-up',
+            input_price: 0.0000012349,
+            output_price: 0.0000012346,
+          },
+        ])
+      }),
+    )
+
+    const models = await discoverModels(providerConfig)
+
+    expect(models[0]?.cost.input).toBe(1.234)
+    expect(models[0]?.cost.output).toBe(1.234)
+    expect(models[1]?.cost.input).toBe(1.235)
+    expect(models[1]?.cost.output).toBe(1.235)
   })
 })

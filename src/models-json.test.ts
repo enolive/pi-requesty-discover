@@ -135,6 +135,25 @@ describe('updateModelsJson', () => {
     expect(written).toMatchSnapshot()
   })
 
+  it('keeps a deterministic order based on the model id', async () => {
+    const envConfig = await createEnvWithModelsJson(tempDirectory, {
+      providers: { 'requesty-export': { apiKey: 'models-json-key', models: [] } },
+    })
+    const data = getRequestyConfig(envConfig).data
+    const models = [
+      createModel({ id: 'requesty/model-c', name: 'Model C' }),
+      createModel({ id: 'requesty/model-a', name: 'Model A' }),
+      createModel({ id: 'requesty/model-b', name: 'Model B' }),
+    ]
+    const shuffled = models.toSorted(shuffleCompareFn)
+
+    updateModelsJson(data, shuffled, envConfig)
+
+    const written = await readModelsJsonFile(envConfig)
+    // Should be written in deterministic sorted order regardless of input order
+    expect(written).toMatchSnapshot()
+  })
+
   it('preserves selected provider fields', async () => {
     const originalRequestyProvider = {
       name: 'Custom Requesty',
@@ -235,4 +254,9 @@ function createModel(overrides: Partial<ProviderModelConfig> = {}): ProviderMode
     maxTokens: 4096,
     ...overrides,
   }
+}
+
+// Fisher-Yates style shuffle: returns -1, 0, or 1
+export function shuffleCompareFn() {
+  return Math.random() * 2 - 1
 }
