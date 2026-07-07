@@ -5,16 +5,15 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   checkModels,
   formatHealthSummary,
-  postChatCompletion,
-  writeHealthCheckLog,
-  type HealthCheckResult,
-  type Provider,
   HealthCheckProgress,
+  type HealthCheckResult,
+  postChatCompletion,
+  type Provider,
+  writeHealthCheckLog,
 } from './health-check'
 import { createTempDirectory, type TempDirectory } from '../test/helpers/temp-agent'
 import { server } from '../test/setup'
 import { Env } from './env.ts'
-import { shuffleCompareFn } from '../test/helpers/shuffle'
 
 const PROVIDER: Provider = {
   baseUrl: 'https://router.requesty.ai/v1',
