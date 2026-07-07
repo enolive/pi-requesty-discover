@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { Env } from './env'
 import { getRequestyConfig, updateModelsJson } from './models-json'
 import { createTempDirectory, type TempDirectory } from '../test/helpers/temp-agent'
+import { shuffleCompareFn } from '../test/helpers/shuffle'
 
 type TestProvider = Record<string, unknown> & { models?: unknown }
 type TestModelsJson = { providers: Record<string, TestProvider> }
@@ -254,9 +255,4 @@ function createModel(overrides: Partial<ProviderModelConfig> = {}): ProviderMode
     maxTokens: 4096,
     ...overrides,
   }
-}
-
-// Fisher-Yates style shuffle: returns -1, 0, or 1
-export function shuffleCompareFn() {
-  return Math.random() * 2 - 1
 }

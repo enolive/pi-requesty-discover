@@ -14,7 +14,7 @@ import {
 import { createTempDirectory, type TempDirectory } from '../test/helpers/temp-agent'
 import { server } from '../test/setup'
 import { Env } from './env.ts'
-import { shuffleCompareFn } from './models-json.test.ts'
+import { shuffleCompareFn } from '../test/helpers/shuffle'
 
 const PROVIDER: Provider = {
   baseUrl: 'https://router.requesty.ai/v1',
