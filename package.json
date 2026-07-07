@@ -1,7 +1,15 @@
 {
   "name": "pi-requesty-discover",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Discover available Requesty models for the Pi Coding Agent",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/enolive/pi-requesty-discover.git"
+  },
+  "homepage": "https://github.com/enolive/pi-requesty-discover",
+  "bugs": {
+    "url": "https://github.com/enolive/pi-requesty-discover/issues"
+  },
   "type": "module",
   "main": "src/index.ts",
   "keywords": [
@@ -35,7 +43,6 @@
       "./index.ts"
     ]
   },
-
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/node": "^26.1.0",
