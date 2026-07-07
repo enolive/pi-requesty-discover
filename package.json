@@ -15,8 +15,8 @@
   ],
   "scripts": {
     "agent-lint": "agnix . -v",
-    "format:check": "prettier --check src extensions test",
-    "format": "prettier --write src extensions test",
+    "format:check": "prettier --check src test",
+    "format": "prettier --write src test",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
