@@ -71,21 +71,18 @@ Use formatting when needed:
 npm run format
 ```
 
-## Package notes
+## Publishing
 
-Published files are controlled by `package.json`:
+To release a new version (human-only, do not run automatically):
 
-```json
-{
-  "files": [
-    "src",
-    "tsconfig.json",
-    "README.adoc",
-    "LICENSE"
-  ]
-}
+```bash
+npm run release
 ```
 
-If adding required runtime files, update `files` accordingly.
+This bumps the version in `package.json`, creates a git tag, and pushes both. The publish workflow automatically publishes to npm when a `v*` tag is pushed.
+
+## Package notes
+
+Published files are controlled by `.npmignore` (npm uses its default ignores plus any rules listed there). Test files are excluded automatically.
 
 Runtime dependencies belong in `dependencies`; development-only tools belong in `devDependencies`. Pi-provided packages such as `@earendil-works/pi-coding-agent` should stay in `peerDependencies` with a `"*"` range.
