@@ -1,4 +1,5 @@
 = pi-requesty-discover
+:icons: font
 
 This extension helps you discover currently available models in requesty.ai for your Pi Coding Agent.
 
