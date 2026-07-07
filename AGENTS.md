@@ -13,20 +13,19 @@ Pi loads the extension directly from TypeScript through the package manifest:
   "main": "src/index.ts",
   "pi": {
     "extensions": [
-      "./extensions/requesty-models-discover.ts"
+      "./index.ts"
     ]
   }
 }
 ```
 
-`extensions/requesty-models-discover.ts` is a small public entrypoint that re-exports the implementation from `src/index.ts`, so installed-package provenance displays a useful path. Keep the implementation in `src/` unless there is a good reason to change the package entrypoint.
+`index.ts` is a small public entrypoint that re-exports the implementation from `src/index.ts`, so installed-package provenance displays a useful path. Keep the implementation in `src/` unless there is a good reason to change the package entrypoint.
 
 Do **not** add a build/transpile step unless explicitly requested.
 
 ## Source layout
 
-- extensions/
-  - requesty-models-discover.ts — package-facing Pi extension entrypoint; re-exports src/index.ts
+- index.ts – package-facing Pi extension entrypoint; re-exports src/index.ts
 - src/
   - index.ts — Pi command registration and high-level command flow
   - env.ts — environment variables and paths to Pi
@@ -63,6 +62,7 @@ Run these before handing off changes:
 npm run format:check
 npm run typecheck
 npm run lint
+npm test
 ```
 
 Use formatting when needed:
@@ -79,7 +79,6 @@ Published files are controlled by `package.json`:
 {
   "files": [
     "src",
-    "extensions",
     "tsconfig.json",
     "README.adoc",
     "LICENSE"
