@@ -33,7 +33,9 @@ export function createFakeCommandContext() {
       setStatus(key: string, text?: string) {
         statuses.push({ key, text })
       },
-      custom<T>(_fn: (tui: unknown, theme: typeof fakeTheme, kb: unknown, done: (result: T) => void) => unknown): Promise<T> {
+      custom<T>(
+        _fn: (tui: unknown, theme: typeof fakeTheme, kb: unknown, done: (result: T) => void) => unknown,
+      ): Promise<T> {
         // Fake implementation: call the function with mock dependencies
         // The function sets up the UI component and returns it, the actual async work
         // (like runCommand) runs internally and calls done() when complete
