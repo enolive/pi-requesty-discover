@@ -13,6 +13,7 @@ const REQUESTY_ENV_KEYS = [
 describe('getEnv', () => {
   beforeEach(() => {
     deleteRequestyEnv()
+    process.env.REQUESTY_API_KEY = 'api-key'
   })
 
   afterEach(() => {
@@ -61,6 +62,14 @@ describe('getEnv', () => {
     const createEnv = () => getEnv()
 
     expect(createEnv).toThrow(/Invalid option/)
+  })
+
+  it('fails when apiKey is not set via REQUESTY_API_KEY', () => {
+    delete process.env.REQUESTY_API_KEY
+
+    const createEnv = () => getEnv()
+
+    expect(createEnv).toThrow(/apiKey must be set via REQUESTY_API_KEY env var/)
   })
 
   it('uses provided homeDir in PI_CODING_AGENT_DIR', () => {
