@@ -45,7 +45,7 @@ jobs:
           node-version: ${{ matrix.node-version }}
           cache: npm
       - run: npm ci
-      - run: npm test
+      - run: npm test -- --reporter=verbose
 
   test-coverage:
     name: Check and report test coverage

@@ -39,7 +39,7 @@ export async function discoverModels(provider: Provider): Promise<ProviderModelC
     throw new Error(`HTTP ${response.status} ${response.statusText}`)
   }
 
-  const rawData = (await response.json()) as unknown
+  const rawData = await response.json()
   const payload = ListModelsResponseSchema.parse(rawData)
 
   return payload.data
@@ -63,5 +63,6 @@ export async function discoverModels(provider: Provider): Promise<ProviderModelC
 }
 
 function pricePerMillionTokens(value: number | null | undefined): number {
-  return (value ?? 0) * 1_000_000
+  const raw = (value ?? 0) * 1_000_000
+  return Number(raw.toFixed(3))
 }

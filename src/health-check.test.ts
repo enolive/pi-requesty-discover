@@ -14,6 +14,7 @@ import {
 import { createTempDirectory, type TempDirectory } from '../test/helpers/temp-agent'
 import { server } from '../test/setup'
 import { Env } from './env.ts'
+import { shuffleCompareFn } from '../test/helpers/shuffle'
 
 const PROVIDER: Provider = {
   baseUrl: 'https://router.requesty.ai/v1',
@@ -505,6 +506,21 @@ describe('health summary and log output', () => {
     const env: Env = { ...envPrototype, health_check_log_path: tempDirectory.healthCheckLogPath }
 
     writeHealthCheckLog(PROVIDER, successfulResults, env)
+
+    const log = await fs.readFile(tempDirectory.healthCheckLogPath, 'utf8')
+    expect(normalizeHealthCheckLog(log)).toMatchSnapshot()
+  })
+
+  it('sorts models in log', async () => {
+    const failingResults = [
+      createHealthCheckResult({ modelId: 'requesty/model-a', ok: false }),
+      createHealthCheckResult({ modelId: 'requesty/model-b', ok: false }),
+      createHealthCheckResult({ modelId: 'requesty/model-c', ok: false }),
+      createHealthCheckResult({ modelId: 'requesty/model-d', ok: false }),
+    ].toSorted(shuffleCompareFn)
+    const env: Env = { ...envPrototype, health_check_log_path: tempDirectory.healthCheckLogPath }
+
+    writeHealthCheckLog(PROVIDER, failingResults, env)
 
     const log = await fs.readFile(tempDirectory.healthCheckLogPath, 'utf8')
     expect(normalizeHealthCheckLog(log)).toMatchSnapshot()
