@@ -31,12 +31,12 @@
   },
   "pi": {
     "extensions": [
-      "./extensions/requesty-models-discover.ts"
+      "./index.ts"
     ]
   },
   "files": [
     "src",
-    "extensions",
+    "index.ts",
     "tsconfig.json",
     "README.adoc",
     "LICENSE"
