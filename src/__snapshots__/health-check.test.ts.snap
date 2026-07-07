@@ -88,7 +88,7 @@ Failed: 4
 
 Failed models:
 
-Model: requesty/model-a
+Model: requesty/model-c
 Latency: 123ms
 Error:
 Unknown error
@@ -102,7 +102,7 @@ Unknown error
 
 ---
 
-Model: requesty/model-c
+Model: requesty/model-a
 Latency: 123ms
 Error:
 Unknown error

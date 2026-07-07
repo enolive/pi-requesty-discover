@@ -103,7 +103,7 @@ export function formatHealthSummary(results: HealthCheckResult[]): string {
 
 export function writeHealthCheckLog(provider: Provider, results: HealthCheckResult[], envConfig: Env = getEnv()): void {
   const passed = results.filter(r => r.ok)
-  const failed = results.filter(r => !r.ok).toSorted((a, b) => a.modelId.localeCompare(b.modelId))
+  const failed = results.filter(r => !r.ok)
   const lines = [
     `Requesty health check log`,
     `Timestamp: ${new Date().toISOString()}`,

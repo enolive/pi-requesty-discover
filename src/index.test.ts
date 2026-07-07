@@ -6,6 +6,7 @@ import * as ModelsJsonModule from './models-json'
 import * as RequestyApiModule from './requesty-api'
 import * as EnvModule from './env'
 import { createFakeCommandContext, createFakePi } from '../test/helpers/fake-pi'
+import { shuffleCompareFn } from '../test/helpers/shuffle.ts'
 
 vi.mock('./health-check')
 vi.mock('./models-json')
@@ -131,6 +132,47 @@ describe('command flow', () => {
     expect(notifications).toMatchSnapshot()
     expect(statuses.at(-1)).toEqual({ key: COMMAND_NAME, text: undefined })
     expectAllNotificationsPrefixed(notifications)
+  })
+
+  it('sorts failing models deterministically for logging', async () => {
+    const failingModel1 = createModel({ id: 'requesty/failing-model-1' })
+    const failingModel2 = createModel({ id: 'requesty/failing-model-2' })
+    const failingModel3 = createModel({ id: 'requesty/failing-model-3' })
+    const healthResults = [
+      createHealthCheckResult({ modelId: 'requesty/failing-model-1', ok: false }),
+      createHealthCheckResult({ modelId: 'requesty/failing-model-2', ok: false }),
+      createHealthCheckResult({ modelId: 'requesty/failing-model-3', ok: false }),
+    ].toSorted(shuffleCompareFn)
+    const { command, formatHealthSummary, writeHealthCheckLog } = await loadExtension({
+      models: [failingModel1, failingModel2, failingModel3],
+      healthResults,
+    })
+    const { ctx } = createFakeCommandContext()
+
+    await command.handler('', ctx)
+
+    expect(formatHealthSummary.mock.calls).toMatchSnapshot()
+    expect(writeHealthCheckLog.mock.calls).toMatchSnapshot()
+  })
+
+  it('sorts passing models deterministically for updating the models.json', async () => {
+    const passingModel1 = createModel({ id: 'requesty/passing-model-1' })
+    const passingModel2 = createModel({ id: 'requesty/passing-model-2' })
+    const passingModel3 = createModel({ id: 'requesty/passing-model-3' })
+    const healthResults = [
+      createHealthCheckResult({ modelId: 'requesty/passing-model-1', ok: true }),
+      createHealthCheckResult({ modelId: 'requesty/passing-model-2', ok: true }),
+      createHealthCheckResult({ modelId: 'requesty/passing-model-3', ok: true }),
+    ].toSorted(shuffleCompareFn)
+    const { command, updateModelsJson } = await loadExtension({
+      models: [passingModel1, passingModel2, passingModel3],
+      healthResults,
+    })
+    const { ctx } = createFakeCommandContext()
+
+    await command.handler('', ctx)
+
+    expect(updateModelsJson.mock.calls).toMatchSnapshot()
   })
 
   it('does not update models.json and notifies error on full error', async () => {
