@@ -1,5 +1,10 @@
 = pi-requesty-discover
 :icons: font
+:tip-caption: :bulb:
+:note-caption: :information_source:
+:important-caption: :heavy_exclamation_mark:
+:caution-caption: :fire:
+:warning-caption: :warning:
 
 This extension helps you discover currently available models in requesty.ai for your Pi Coding Agent.
 
