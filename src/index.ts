@@ -68,7 +68,7 @@ async function runCommand(args: string, ctx: ExtensionCommandContext): Promise<v
         return r.ok && model ? [model] : []
       })
       healthCheckSummary = formatHealthSummary(healthResults)
-      writeHealthCheckLog(env.health_check_log_path, provider, healthResults, env)
+      writeHealthCheckLog(provider, healthResults, env)
       logNote = `Full health check log: ${env.health_check_log_path}\n`
     } else {
       passing = models

@@ -101,12 +101,7 @@ export function formatHealthSummary(results: HealthCheckResult[]): string {
   return `Health check: ${passed.length} OK, ${failed.length} failed:\n${failedModels}\n`
 }
 
-export function writeHealthCheckLog(
-  logPath: string,
-  provider: Provider,
-  results: HealthCheckResult[],
-  envConfig: Env = getEnv(),
-): void {
+export function writeHealthCheckLog(provider: Provider, results: HealthCheckResult[], envConfig: Env = getEnv()): void {
   const passed = results.filter(r => r.ok)
   const failed = results.filter(r => !r.ok)
   const lines = [
@@ -137,8 +132,8 @@ export function writeHealthCheckLog(
     }
   }
 
-  fs.mkdirSync(path.dirname(logPath), { recursive: true })
-  fs.writeFileSync(logPath, `${lines.join('\n')}\n`, 'utf8')
+  fs.mkdirSync(path.dirname(envConfig.health_check_log_path), { recursive: true })
+  fs.writeFileSync(envConfig.health_check_log_path, `${lines.join('\n')}\n`, 'utf8')
 }
 
 export async function postChatCompletion(

@@ -13,6 +13,7 @@ import {
 } from './health-check'
 import { createTempDirectory, type TempDirectory } from '../test/helpers/temp-agent'
 import { server } from '../test/setup'
+import { Env } from './env.ts'
 
 const PROVIDER: Provider = {
   baseUrl: 'https://router.requesty.ai/v1',
@@ -432,6 +433,13 @@ describe('checkModels', () => {
 
 describe('health summary and log output', () => {
   let tempDirectory: TempDirectory
+  const envPrototype: Env = {
+    health_check_log_path: '',
+    health_check_mode: 'basic',
+    models_json_path: '',
+    provider_id: 'requesty-export',
+    requesty_api_key: '',
+  }
 
   beforeEach(async () => {
     tempDirectory = await createTempDirectory()
@@ -481,20 +489,22 @@ describe('health summary and log output', () => {
         ok: false,
       }),
     ]
+    const env: Env = { ...envPrototype, health_check_log_path: tempDirectory.healthCheckLogPath }
 
-    writeHealthCheckLog(tempDirectory.healthCheckLogPath, PROVIDER, partialFailureResults)
+    writeHealthCheckLog(PROVIDER, partialFailureResults, env)
 
     const log = await fs.readFile(tempDirectory.healthCheckLogPath, 'utf8')
     expect(normalizeHealthCheckLog(log)).toMatchSnapshot()
   })
 
   it('writes log file without any errors', async () => {
-    const partialFailureResults = [
+    const successfulResults = [
       createHealthCheckResult({ modelId: 'requesty/model-a', ok: true }),
       createHealthCheckResult({ modelId: 'requesty/model-b', ok: true }),
     ]
+    const env: Env = { ...envPrototype, health_check_log_path: tempDirectory.healthCheckLogPath }
 
-    writeHealthCheckLog(tempDirectory.healthCheckLogPath, PROVIDER, partialFailureResults)
+    writeHealthCheckLog(PROVIDER, successfulResults, env)
 
     const log = await fs.readFile(tempDirectory.healthCheckLogPath, 'utf8')
     expect(normalizeHealthCheckLog(log)).toMatchSnapshot()
