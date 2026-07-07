@@ -58,17 +58,15 @@ export function getRequestyConfig(envConfig: Env = getEnv()): RequestyConfig {
 export function updateModelsJson(data: ModelsJson, models: ProviderModelConfig[], envConfig: Env = getEnv()): void {
   data.providers[envConfig.provider_id] = {
     ...data.providers[envConfig.provider_id],
-    models: models
-      .sort((a, b) => a.id.localeCompare(b.id))
-      .map(model => ({
-        id: model.id,
-        name: model.name,
-        reasoning: model.reasoning,
-        input: model.input,
-        cost: model.cost,
-        contextWindow: model.contextWindow,
-        maxTokens: model.maxTokens,
-      })),
+    models: models.map(model => ({
+      id: model.id,
+      name: model.name,
+      reasoning: model.reasoning,
+      input: model.input,
+      cost: model.cost,
+      contextWindow: model.contextWindow,
+      maxTokens: model.maxTokens,
+    })),
   } satisfies ProviderConfig
 
   writeModelsJson(data, envConfig)

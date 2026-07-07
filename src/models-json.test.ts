@@ -5,7 +5,6 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { Env } from './env'
 import { getRequestyConfig, updateModelsJson } from './models-json'
 import { createTempDirectory, type TempDirectory } from '../test/helpers/temp-agent'
-import { shuffleCompareFn } from '../test/helpers/shuffle'
 
 type TestProvider = Record<string, unknown> & { models?: unknown }
 type TestModelsJson = { providers: Record<string, TestProvider> }
@@ -133,25 +132,6 @@ describe('updateModelsJson', () => {
     updateModelsJson(data, models, envConfig)
 
     const written = await readModelsJsonFile(envConfig)
-    expect(written).toMatchSnapshot()
-  })
-
-  it('keeps a deterministic order based on the model id', async () => {
-    const envConfig = await createEnvWithModelsJson(tempDirectory, {
-      providers: { 'requesty-export': { apiKey: 'models-json-key', models: [] } },
-    })
-    const data = getRequestyConfig(envConfig).data
-    const models = [
-      createModel({ id: 'requesty/model-c', name: 'Model C' }),
-      createModel({ id: 'requesty/model-a', name: 'Model A' }),
-      createModel({ id: 'requesty/model-b', name: 'Model B' }),
-    ]
-    const shuffled = models.toSorted(shuffleCompareFn)
-
-    updateModelsJson(data, shuffled, envConfig)
-
-    const written = await readModelsJsonFile(envConfig)
-    // Should be written in deterministic sorted order regardless of input order
     expect(written).toMatchSnapshot()
   })
 

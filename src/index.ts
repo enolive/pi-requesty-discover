@@ -77,13 +77,14 @@ async function runCommand(args: string, ctx: ExtensionCommandContext): Promise<v
           ctx.ui.setStatus(COMMAND_NAME, `Checking models ${completed}/${total}...`)
         },
       })
-      failed = healthResults.filter(r => !r.ok)
-      passing = healthResults.flatMap(r => {
+      const sortedResults = healthResults.toSorted((a, b) => a.modelId.localeCompare(b.modelId))
+      failed = sortedResults.filter(r => !r.ok)
+      passing = sortedResults.flatMap(r => {
         const model = modelsMap.get(r.modelId)
         return r.ok && model ? [model] : []
       })
-      healthCheckSummary = formatHealthSummary(healthResults)
-      writeHealthCheckLog(provider, healthResults, env)
+      healthCheckSummary = formatHealthSummary(sortedResults)
+      writeHealthCheckLog(provider, sortedResults, env)
       logNote = `Full health check log: ${env.health_check_log_path}\n`
     } else {
       passing = models

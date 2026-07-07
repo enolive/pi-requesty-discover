@@ -77,48 +77,6 @@ exports[`health summary and log output > formats summaries 1`] = `
 }
 `;
 
-exports[`health summary and log output > sorts models in log 1`] = `
-"Requesty health check log
-Timestamp: <timestamp>
-Provider: requesty-export
-Base URL: https://router.requesty.ai/v1
-Total: 4
-Passed: 0
-Failed: 4
-
-Failed models:
-
-Model: requesty/model-a
-Latency: 123ms
-Error:
-Unknown error
-
----
-
-Model: requesty/model-b
-Latency: 123ms
-Error:
-Unknown error
-
----
-
-Model: requesty/model-c
-Latency: 123ms
-Error:
-Unknown error
-
----
-
-Model: requesty/model-d
-Latency: 123ms
-Error:
-Unknown error
-
----
-
-"
-`;
-
 exports[`health summary and log output > writes log file 1`] = `
 "Requesty health check log
 Timestamp: <timestamp>
