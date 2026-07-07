@@ -1,0 +1,25 @@
+# Test files
+*.test.ts
+__snapshots__/
+
+# Test directories
+test/
+coverage/
+
+# Config files (dev only)
+eslint.config.ts
+vitest.config.ts
+.prettierignore
+.prettierrc
+tsconfig.json
+
+# VCS
+.git/
+.github/
+
+# IDE
+.idea/
+
+# Misc
+.gitignore
+AGENTS.md

@@ -19,6 +19,7 @@
     "format": "prettier --write src test",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
+    "release": "npm version patch && git push --follow-tags",
     "test": "vitest run",
     "test:unit": "vitest run src",
     "test:unit:coverage": "vitest run src --coverage",
@@ -34,13 +35,7 @@
       "./index.ts"
     ]
   },
-  "files": [
-    "src",
-    "index.ts",
-    "tsconfig.json",
-    "README.adoc",
-    "LICENSE"
-  ],
+
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/node": "^26.1.0",
