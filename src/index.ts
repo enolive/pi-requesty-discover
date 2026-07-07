@@ -1,4 +1,9 @@
-import type { ExtensionAPI, ExtensionCommandContext, ProviderModelConfig } from '@earendil-works/pi-coding-agent'
+import {
+  BorderedLoader,
+  ExtensionAPI,
+  ExtensionCommandContext,
+  ProviderModelConfig,
+} from '@earendil-works/pi-coding-agent'
 import { getEnv } from './env'
 import { getRequestyConfig, updateModelsJson } from './models-json'
 import { discoverModels } from './requesty-api'
@@ -20,7 +25,17 @@ export default function (pi: ExtensionAPI) {
   pi.registerCommand(COMMAND_NAME, {
     description: 'Dynamically discover Requesty models, run health checks, and update the local models.json.',
     getArgumentCompletions,
-    handler: runCommand,
+    handler: async (args, ctx) => {
+      await withLoader(ctx, 'Discovering models...', () => runCommand(args, ctx))
+    },
+  })
+}
+
+async function withLoader<T>(ctx: ExtensionCommandContext, message: string, fn: () => Promise<T>): Promise<T> {
+  return ctx.ui.custom<T>((_tui, theme, _kb, done) => {
+    const loader = new BorderedLoader(_tui, theme, message, { cancellable: false })
+    fn().then(done).catch(done)
+    return loader
   })
 }
 
