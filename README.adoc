@@ -101,6 +101,12 @@ On startup, the extension fetches `<baseUrl>/models` using `REQUESTY_API_KEY` as
 | `off`, `basic`, `full`
 | `full`
 | The health-check mode.
+
+| `PI_CODING_AGENT_DIR`
+| no
+| `string`
+| `~/.pi/agent`
+| pi configuration directory
 |===
 
 == Command

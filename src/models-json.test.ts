@@ -44,17 +44,6 @@ describe('getRequestyConfig', () => {
     expect(readConfig).toThrow(`${envConfig.models_json_path} is invalid`)
   })
 
-  it('throws if API key is missing from env', async () => {
-    const envConfig = await createEnvWithModelsJson(tempDirectory, {
-      providers: { 'requesty-export': {} },
-    })
-    const envConfigWithoutApiKey = { ...envConfig, requesty_api_key: undefined }
-
-    const readConfig = () => getRequestyConfig(envConfigWithoutApiKey)
-
-    expect(readConfig).toThrow(`apiKey must be set via REQUESTY_API_KEY env var`)
-  })
-
   it('ignores apiKey from models.json no matter what it is as it is unreliable due to env substitution and other things', async () => {
     const envConfig = await createEnvWithModelsJson(tempDirectory, {
       providers: { 'requesty-export': { apiKey: `these-are-not-the-druids-you-are-looking-for` } },

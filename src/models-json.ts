@@ -44,11 +44,6 @@ export function getRequestyConfig(envConfig: Env = getEnv()): RequestyConfig {
   }
 
   const apiKey = envConfig.requesty_api_key
-
-  if (!apiKey) {
-    throw new Error(`apiKey must be set via REQUESTY_API_KEY env var`)
-  }
-
   return {
     data,
     provider: {

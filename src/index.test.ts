@@ -249,7 +249,7 @@ async function loadExtension(options: LoadExtensionOptions = {}) {
     models_json_path: MODELS_JSON_PATH,
     health_check_log_path: HEALTH_CHECK_LOG_PATH,
     provider_id: 'requesty-export',
-    requesty_api_key: undefined,
+    requesty_api_key: 'ignore-me-plz',
     health_check_mode: options.healthCheckMode ?? 'basic',
   })
 
