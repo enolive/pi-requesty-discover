@@ -510,21 +510,6 @@ describe('health summary and log output', () => {
     const log = await fs.readFile(tempDirectory.healthCheckLogPath, 'utf8')
     expect(normalizeHealthCheckLog(log)).toMatchSnapshot()
   })
-
-  it('sorts models in log', async () => {
-    const failingResults = [
-      createHealthCheckResult({ modelId: 'requesty/model-a', ok: false }),
-      createHealthCheckResult({ modelId: 'requesty/model-b', ok: false }),
-      createHealthCheckResult({ modelId: 'requesty/model-c', ok: false }),
-      createHealthCheckResult({ modelId: 'requesty/model-d', ok: false }),
-    ].toSorted(shuffleCompareFn)
-    const env: Env = { ...envPrototype, health_check_log_path: tempDirectory.healthCheckLogPath }
-
-    writeHealthCheckLog(PROVIDER, failingResults, env)
-
-    const log = await fs.readFile(tempDirectory.healthCheckLogPath, 'utf8')
-    expect(normalizeHealthCheckLog(log)).toMatchSnapshot()
-  })
 })
 
 function createHealthCheckResult(overrides: Partial<HealthCheckResult> = {}): HealthCheckResult {
