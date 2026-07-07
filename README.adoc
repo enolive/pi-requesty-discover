@@ -27,10 +27,13 @@ Use this extension if
 - you don't want to handcraft your own curated list of models constantly
 - you want to health check the list to complain about non-working models via a dry-run
 
-== Recommended Installation from GitHub repo
+== Installation
 
 [source,bash]
 ----
+# NPM
+pi install npm:pi-requesty-discover
+# GitHub
 pi install git:github.com/enolive/pi-requesty-discover
 ----
 
