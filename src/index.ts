@@ -20,23 +20,70 @@ interface AutocompleteItem {
 
 type NotificationLevel = 'info' | 'warning' | 'error'
 
+type StatusReporter = {
+  set(message: string): void
+  clear(): void
+}
+
+type LoaderWithMutableMessage = {
+  loader?: {
+    setMessage(message: string): void
+  }
+}
+
 // noinspection JSUnusedGlobalSymbols
 export default function (pi: ExtensionAPI) {
   pi.registerCommand(COMMAND_NAME, {
     description: 'Dynamically discover Requesty models, run health checks, and update the local models.json.',
     getArgumentCompletions,
     handler: async (args, ctx) => {
-      await withLoader(ctx, 'Discovering models...', () => runCommand(args, ctx))
+      await runWithStatusUi(ctx, 'Discovering models...', status => runCommand(args, ctx, status))
     },
   })
 }
 
-async function withLoader<T>(ctx: ExtensionCommandContext, message: string, fn: () => Promise<T>): Promise<T> {
+async function runWithStatusUi<T>(
+  ctx: ExtensionCommandContext,
+  initialMessage: string,
+  fn: (status: StatusReporter) => Promise<T>,
+): Promise<T> {
+  if (ctx.mode !== 'tui') {
+    return fn(createFooterStatusReporter(ctx))
+  }
+
   return ctx.ui.custom<T>((_tui, theme, _kb, done) => {
-    const loader = new BorderedLoader(_tui, theme, message, { cancellable: false })
-    fn().then(done).catch(done)
+    const loader = new BorderedLoader(_tui, theme, initialMessage, { cancellable: false })
+    const status = createLoaderStatusReporter(loader)
+    fn(status).then(done).catch(done)
     return loader
   })
+}
+
+function createFooterStatusReporter(ctx: ExtensionCommandContext): StatusReporter {
+  return {
+    set(message: string) {
+      ctx.ui.setStatus(COMMAND_NAME, message)
+    },
+    clear() {
+      ctx.ui.setStatus(COMMAND_NAME, undefined)
+    },
+  }
+}
+
+function createLoaderStatusReporter(loader: BorderedLoader): StatusReporter {
+  return {
+    set(message: string) {
+      setBorderedLoaderMessage(loader, message)
+    },
+    clear() {
+      // Nothing to clear: the overlay closes when ctx.ui.custom() resolves.
+    },
+  }
+}
+
+function setBorderedLoaderMessage(loader: BorderedLoader, message: string): void {
+  const mutableLoader = loader as unknown as LoaderWithMutableMessage
+  mutableLoader.loader?.setMessage(message)
 }
 
 function getArgumentCompletions(prefix: string): AutocompleteItem[] {
@@ -51,8 +98,8 @@ function getArgumentCompletions(prefix: string): AutocompleteItem[] {
   return options.filter(o => o.value.toLowerCase().startsWith(prefix.toLowerCase()))
 }
 
-async function runCommand(args: string, ctx: ExtensionCommandContext): Promise<void> {
-  ctx.ui.setStatus(COMMAND_NAME, 'Discovering Requesty models...')
+async function runCommand(args: string, ctx: ExtensionCommandContext, status: StatusReporter): Promise<void> {
+  status.set('Discovering Requesty models...')
   const parts = args.split(' ')
   const dryRun = parts.includes(DRY_RUN_ARG)
   if (dryRun) {
@@ -71,10 +118,10 @@ async function runCommand(args: string, ctx: ExtensionCommandContext): Promise<v
     let healthCheckSummary = ''
 
     if (env.health_check_mode !== 'off') {
-      ctx.ui.setStatus(COMMAND_NAME, `Checking models 0/${models.length}...`)
+      status.set(`Checking models 0/${models.length}...`)
       const healthResults = await checkModels(provider, models, env.health_check_mode === 'full', {
         onProgress: ({ completed, total }) => {
-          ctx.ui.setStatus(COMMAND_NAME, `Checking models ${completed}/${total}...`)
+          status.set(`Checking models ${completed}/${total}...`)
         },
       })
       const sortedResults = healthResults.toSorted((a, b) => a.modelId.localeCompare(b.modelId))
@@ -108,7 +155,7 @@ async function runCommand(args: string, ctx: ExtensionCommandContext): Promise<v
   } catch (error) {
     notify(ctx, `Discovery failed: ${error instanceof Error ? error.message : String(error)}`, 'error')
   } finally {
-    ctx.ui.setStatus(COMMAND_NAME, undefined)
+    status.clear()
   }
 }
 
