@@ -40,6 +40,7 @@ Do **not** add a build/transpile step unless explicitly requested.
 
 ## Conventions
 
+- Follow test-driven development for behavior-changing code: **red, green, refactor**. Add or update the test that exposes the issue or missing behavior, verify it fails for the right reason, then implement the change and clean up.
 - Use TypeScript for source files.
 - Keep imports extensionless inside `src`, e.g. `import env from './env'`.
 - Use Pi's exported types where available, especially:

@@ -1,0 +1,38 @@
+= Contributing
+
+Thanks for your interest in contributing.
+
+== Useful scripts
+
+These will also be run in the CI/CD pipeline.
+Make sure to run them beforehand to get a faster feedback
+about the overall quality.
+
+[source,bash]
+----
+# install all dependencies
+npm install
+
+# linting and format checking
+npm run format:check
+npm run typecheck
+npm run lint
+npm run agent-lint
+
+# run all the tests
+npm test
+----
+
+Use `npm run format` to fix formatting.
+
+Refer to additional scripts in link:package.json[].
+
+Please keep changes focused and include tests or docs when behavior changes.
+
+Notes:
+
+* The package is loaded directly from TypeScript; do not add a build step casually.
+* Keep implementation in `src/`; root `index.ts` is just the package entrypoint.
+* Edit `README.adoc` if necessary.
+* See `AGENTS.md` for detailed repository conventions.
+* I am pretty good at identifying AI slop 😁.
