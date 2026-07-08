@@ -5,7 +5,7 @@ Thanks for your interest in contributing.
 == Useful scripts
 
 These will also be run in the CI/CD pipeline.
-Make sure to run them beforehand to get a faster feedback
+Make sure to run them beforehand to get faster feedback
 about the overall quality.
 
 [source,bash]
@@ -13,11 +13,8 @@ about the overall quality.
 # install all dependencies
 npm install
 
-# linting and format checking
-npm run format:check
-npm run typecheck
-npm run lint
-npm run agent-lint
+# linting and format checking all-in-one
+npm run check
 
 # run all the tests
 npm test
