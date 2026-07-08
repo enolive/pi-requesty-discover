@@ -37,7 +37,8 @@
   },
   "license": "MIT",
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": "*"
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*"
   },
   "pi": {
     "extensions": [
@@ -45,6 +46,7 @@
     ]
   },
   "devDependencies": {
+    "@earendil-works/pi-tui": "^0.80.3",
     "@eslint/js": "^10.0.1",
     "@types/node": "^26.1.0",
     "@vitest/coverage-v8": "^4.1.9",

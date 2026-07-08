@@ -33,6 +33,7 @@ Do **not** add a build/transpile step unless explicitly requested.
   - requesty-api.ts — Requesty models library API
   - health-check.ts — model health checks and health-check log writing
   - *.test.ts — unit tests colocated with source files
+  - ui/ – contains ui components
 - test/
   - integration.test.ts — integration tests
   - helpers/ — integration test helpers

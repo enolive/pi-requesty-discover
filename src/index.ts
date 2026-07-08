@@ -1,13 +1,9 @@
-import {
-  BorderedLoader,
-  ExtensionAPI,
-  ExtensionCommandContext,
-  ProviderModelConfig,
-} from '@earendil-works/pi-coding-agent'
+import { ExtensionAPI, ExtensionCommandContext, ProviderModelConfig } from '@earendil-works/pi-coding-agent'
 import { getEnv } from './env'
 import { getRequestyConfig, updateModelsJson } from './models-json'
 import { discoverModels } from './requesty-api'
 import { checkModels, formatHealthSummary, writeHealthCheckLog } from './health-check'
+import { RequestyStatusLoader } from './ui/requesty-status-loader.ts'
 
 const COMMAND_NAME = 'requesty-discover'
 const DRY_RUN_ARG = '--dry-run'
@@ -23,12 +19,6 @@ type NotificationLevel = 'info' | 'warning' | 'error'
 type StatusReporter = {
   set(message: string): void
   clear(): void
-}
-
-type LoaderWithMutableMessage = {
-  loader?: {
-    setMessage(message: string): void
-  }
 }
 
 // noinspection JSUnusedGlobalSymbols
@@ -52,7 +42,7 @@ async function runWithStatusUi<T>(
   }
 
   return ctx.ui.custom<T>((_tui, theme, _kb, done) => {
-    const loader = new BorderedLoader(_tui, theme, initialMessage, { cancellable: false })
+    const loader = new RequestyStatusLoader(_tui, theme, initialMessage)
     const status = createLoaderStatusReporter(loader)
     fn(status).then(done).catch(done)
     return loader
@@ -70,20 +60,15 @@ function createFooterStatusReporter(ctx: ExtensionCommandContext): StatusReporte
   }
 }
 
-function createLoaderStatusReporter(loader: BorderedLoader): StatusReporter {
+function createLoaderStatusReporter(loader: RequestyStatusLoader): StatusReporter {
   return {
     set(message: string) {
-      setBorderedLoaderMessage(loader, message)
+      loader.setMessage(message)
     },
     clear() {
-      // Nothing to clear: the overlay closes when ctx.ui.custom() resolves.
+      // Nothing to clear: the loader closes when ctx.ui.custom() resolves.
     },
   }
-}
-
-function setBorderedLoaderMessage(loader: BorderedLoader, message: string): void {
-  const mutableLoader = loader as unknown as LoaderWithMutableMessage
-  mutableLoader.loader?.setMessage(message)
 }
 
 function getArgumentCompletions(prefix: string): AutocompleteItem[] {
