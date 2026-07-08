@@ -78,7 +78,7 @@ Example:
 IMPORTANT: The `apiKey` from `models.json` is not used by this extension.
 It may contain Pi-specific environment-variable substitution that the extension cannot reliably resolve.
 Set `REQUESTY_API_KEY` instead. This variable is required.
-You can configure the real apiKey as you like, but it would be recommended to use the same variable as for the model discovery.
+You can configure the real `apiKey` as you like, but it would be recommended to use the same variable as for the model discovery.
 
 IMPORTANT: Health checks are designed to use only a few tokens, but they still make real Requesty API calls and may consume credits.
 
