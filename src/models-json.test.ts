@@ -135,6 +135,18 @@ describe('updateModelsJson', () => {
     expect(written).toMatchSnapshot()
   })
 
+  it('writes REQUESTY_API_KEY reference when selected provider has no apiKey', async () => {
+    const envConfig = await createEnvWithModelsJson(tempDirectory, {
+      providers: { 'requesty-export': { models: [] } },
+    })
+    const data = getRequestyConfig(envConfig).data
+
+    updateModelsJson(data, [createModel()], envConfig)
+
+    const written = await readModelsJsonFile(envConfig)
+    expect(written.providers['requesty-export']?.apiKey).toBe('$REQUESTY_API_KEY')
+  })
+
   it('preserves selected provider fields', async () => {
     const originalRequestyProvider = {
       name: 'Custom Requesty',
