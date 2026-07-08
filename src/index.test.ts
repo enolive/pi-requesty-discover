@@ -1,5 +1,6 @@
 import type { ProviderModelConfig, RegisteredCommand } from '@earendil-works/pi-coding-agent'
 import { describe, expect, it, vi } from 'vitest'
+import type { NotificationLevel, Notifier, StatusReporter } from './index'
 import type { HealthCheckResult, Provider } from './health-check'
 import * as HealthCheckModule from './health-check'
 import * as ModelsJsonModule from './models-json'
@@ -85,15 +86,15 @@ describe('argument completions', () => {
 
 describe('command flow', () => {
   it('emits notification and does not update models.json on dry-run', async () => {
-    const { command, updateModelsJson } = await loadExtension({ healthCheckMode: 'off' })
-    const { ctx, notifications, statuses } = createFakeCommandContext()
+    const { runCommand, updateModelsJson } = await loadExtension({ healthCheckMode: 'off' })
+    const { notifier, capturedNotifications } = createFakeNotifier()
+    const { status, capturedStatuses } = createFakeStatusReporter()
 
-    await command.handler('--dry-run', ctx)
+    await runCommand('--dry-run', status, notifier)
 
     expect(updateModelsJson).not.toHaveBeenCalled()
-    expect(notifications).toMatchSnapshot()
-    expect(statuses.at(-1)).toEqual({ key: COMMAND_NAME, text: undefined })
-    expectAllNotificationsPrefixed(notifications)
+    expect(capturedNotifications).toMatchSnapshot()
+    expect(capturedStatuses.at(-1)).toBeUndefined()
   })
 
   it('updates models.json and notifies info on no failures', async () => {
@@ -102,15 +103,15 @@ describe('command flow', () => {
       createHealthCheckResult({ modelId: 'requesty/model-a', ok: true }),
       createHealthCheckResult({ modelId: 'requesty/model-b', ok: true }),
     ]
-    const { command, updateModelsJson } = await loadExtension({ models, healthResults })
-    const { ctx, notifications, statuses } = createFakeCommandContext()
+    const { runCommand, updateModelsJson } = await loadExtension({ models, healthResults })
+    const { notifier, capturedNotifications } = createFakeNotifier()
+    const { status, capturedStatuses } = createFakeStatusReporter()
 
-    await command.handler('', ctx)
+    await runCommand('', status, notifier)
 
     expect(updateModelsJson).toHaveBeenCalledWith(modelsJson, models, expect.any(Object))
-    expect(notifications).toMatchSnapshot()
-    expect(statuses.at(-1)).toEqual({ key: COMMAND_NAME, text: undefined })
-    expectAllNotificationsPrefixed(notifications)
+    expect(capturedNotifications).toMatchSnapshot()
+    expect(capturedStatuses.at(-1)).toBeUndefined()
   })
 
   it('updates passing models and notifies warning on partial failures', async () => {
@@ -120,18 +121,18 @@ describe('command flow', () => {
       createHealthCheckResult({ modelId: 'requesty/passing-model', ok: true }),
       createHealthCheckResult({ modelId: 'requesty/failing-model', ok: false }),
     ]
-    const { command, updateModelsJson } = await loadExtension({
+    const { runCommand, updateModelsJson } = await loadExtension({
       models: [passingModel, failingModel],
       healthResults,
     })
-    const { ctx, notifications, statuses } = createFakeCommandContext()
+    const { notifier, capturedNotifications } = createFakeNotifier()
+    const { status, capturedStatuses } = createFakeStatusReporter()
 
-    await command.handler('', ctx)
+    await runCommand('', status, notifier)
 
     expect(updateModelsJson).toHaveBeenCalledWith(modelsJson, [passingModel], expect.any(Object))
-    expect(notifications).toMatchSnapshot()
-    expect(statuses.at(-1)).toEqual({ key: COMMAND_NAME, text: undefined })
-    expectAllNotificationsPrefixed(notifications)
+    expect(capturedNotifications).toMatchSnapshot()
+    expect(capturedStatuses.at(-1)).toBeUndefined()
   })
 
   it('sorts failing models deterministically for logging', async () => {
@@ -143,13 +144,14 @@ describe('command flow', () => {
       createHealthCheckResult({ modelId: 'requesty/failing-model-2', ok: false }),
       createHealthCheckResult({ modelId: 'requesty/failing-model-3', ok: false }),
     ].toSorted(shuffleCompareFn)
-    const { command, formatHealthSummary, writeHealthCheckLog } = await loadExtension({
+    const { runCommand, formatHealthSummary, writeHealthCheckLog } = await loadExtension({
       models: [failingModel1, failingModel2, failingModel3],
       healthResults: shuffledHealthResults,
     })
-    const { ctx } = createFakeCommandContext()
+    const { notifier } = createFakeNotifier()
+    const { status } = createFakeStatusReporter()
 
-    await command.handler('', ctx)
+    await runCommand('', status, notifier)
 
     const modelId = (healthCheck: HealthCheckResult) => healthCheck.modelId
     const [summaryHealthChecks] = formatHealthSummary.mock.calls[0]
@@ -173,13 +175,14 @@ describe('command flow', () => {
       createHealthCheckResult({ modelId: 'requesty/passing-model-2', ok: true }),
       createHealthCheckResult({ modelId: 'requesty/passing-model-3', ok: true }),
     ].toSorted(shuffleCompareFn)
-    const { command, updateModelsJson } = await loadExtension({
+    const { runCommand, updateModelsJson } = await loadExtension({
       models: [passingModel1, passingModel2, passingModel3],
       healthResults: shuffledHealthResults,
     })
-    const { ctx } = createFakeCommandContext()
+    const { notifier } = createFakeNotifier()
+    const { status } = createFakeStatusReporter()
 
-    await command.handler('', ctx)
+    await runCommand('', status, notifier)
 
     const [, passingModels] = updateModelsJson.mock.calls[0]
     const passingModelIds = passingModels.map(model => model.id)
@@ -196,66 +199,100 @@ describe('command flow', () => {
       createHealthCheckResult({ modelId: 'requesty/model-a', ok: false }),
       createHealthCheckResult({ modelId: 'requesty/model-b', ok: false }),
     ]
-    const { command, updateModelsJson } = await loadExtension({ models, healthResults })
-    const { ctx, notifications, statuses } = createFakeCommandContext()
+    const { runCommand, updateModelsJson } = await loadExtension({ models, healthResults })
+    const { notifier, capturedNotifications } = createFakeNotifier()
+    const { status, capturedStatuses } = createFakeStatusReporter()
 
-    await command.handler('', ctx)
+    await runCommand('', status, notifier)
 
     expect(updateModelsJson).not.toHaveBeenCalled()
-    expect(notifications).toMatchSnapshot()
-    expect(statuses.at(-1)).toEqual({ key: COMMAND_NAME, text: undefined })
-    expectAllNotificationsPrefixed(notifications)
+    expect(capturedNotifications).toMatchSnapshot()
+    expect(capturedStatuses.at(-1)).toBeUndefined()
   })
 
   it('notifies full error and clears status', async () => {
-    const { command, updateModelsJson } = await loadExtension({
+    const { runCommand, updateModelsJson } = await loadExtension({
       getRequestyConfigError: new Error('models.json exploded'),
     })
-    const { ctx, notifications, statuses } = createFakeCommandContext()
+    const { notifier, capturedNotifications } = createFakeNotifier()
+    const { status, capturedStatuses } = createFakeStatusReporter()
 
-    await command.handler('', ctx)
+    await runCommand('', status, notifier)
 
     expect(updateModelsJson).not.toHaveBeenCalled()
-    expect(notifications).toMatchSnapshot()
-    expect(statuses.at(-1)).toEqual({ key: COMMAND_NAME, text: undefined })
-    expectAllNotificationsPrefixed(notifications)
+    expect(capturedNotifications).toMatchSnapshot()
+    expect(capturedStatuses.at(-1)).toBeUndefined()
   })
 
   it('notifies full error for sth not deriving from Error', async () => {
-    const { command } = await loadExtension({
+    const { runCommand } = await loadExtension({
       getRequestyConfigError: 'this is not an error',
     })
-    const { ctx, notifications } = createFakeCommandContext()
+    const { notifier, capturedNotifications } = createFakeNotifier()
+    const { status } = createFakeStatusReporter()
 
-    await command.handler('', ctx)
+    await runCommand('', status, notifier)
 
-    expect(notifications).toMatchSnapshot()
+    expect(capturedNotifications).toMatchSnapshot()
   })
 
   it('notifies full error on async rejections', async () => {
-    const { command } = await loadExtension({
+    const { runCommand } = await loadExtension({
       discoverModelsError: new Error('requesty has a bad day trying to read its models'),
     })
-    const { ctx, notifications } = createFakeCommandContext()
+    const { notifier, capturedNotifications } = createFakeNotifier()
+    const { status } = createFakeStatusReporter()
 
-    await command.handler('', ctx)
+    await runCommand('', status, notifier)
 
-    expect(notifications).toMatchSnapshot()
+    expect(capturedNotifications).toMatchSnapshot()
   })
 
-  it('sets progress status while checking models', async () => {
+  it('reports progress while checking models', async () => {
+    const models = [createModel({ id: 'requesty/model-a' }), createModel({ id: 'requesty/model-b' })]
+    const { runCommand } = await loadExtension({ models })
+    const { notifier } = createFakeNotifier()
+    const { status, capturedStatuses } = createFakeStatusReporter()
+
+    await runCommand('', status, notifier)
+
+    expect(capturedStatuses).toEqual([
+      'Discovering Requesty models...',
+      'Checking models 0/2...',
+      'Checking models 1/2...',
+      'Checking models 2/2...',
+      undefined,
+    ])
+  })
+})
+
+describe('command handler ui wiring', () => {
+  it('does not use ui sinks outside tui mode', async () => {
     const models = [createModel({ id: 'requesty/model-a' }), createModel({ id: 'requesty/model-b' })]
     const { command } = await loadExtension({ models })
-    const { ctx, statuses } = createFakeCommandContext()
+    const { ctx, loaderStatusSink, notifications } = createFakeCommandContext({ mode: 'print' })
 
     await command.handler('', ctx)
 
-    expect(statuses).toEqual([
-      { key: COMMAND_NAME, text: 'Discovering Requesty models...' },
-      { key: COMMAND_NAME, text: 'Checking models 0/2...' },
-      { key: COMMAND_NAME, text: 'Checking models 1/2...' },
-      { key: COMMAND_NAME, text: 'Checking models 2/2...' },
-      { key: COMMAND_NAME, text: undefined },
+    expect(loaderStatusSink).toEqual([])
+    expect(notifications).toEqual([])
+  })
+
+  it('uses the loader status reporter in tui mode', async () => {
+    const models = [createModel({ id: 'requesty/model-a' }), createModel({ id: 'requesty/model-b' })]
+    const { command } = await loadExtension({ models })
+    const { ctx, loaderStatusSink, notifications } = createFakeCommandContext({ mode: 'tui' })
+
+    await command.handler('', ctx)
+
+    expect(notifications).toHaveLength(1)
+    expect(notifications[0].type).toBe('info')
+    expect(notifications[0].message).toContain(`${COMMAND_NAME}: Discovered 2 Requesty model(s).`)
+    expect(loaderStatusSink).toEqual([
+      'Discovering Requesty models...',
+      'Checking models 0/2...',
+      'Checking models 1/2...',
+      'Checking models 2/2...',
     ])
   })
 })
@@ -321,6 +358,7 @@ async function loadExtension(options: LoadExtensionOptions = {}) {
 
   return {
     command,
+    runCommand: extension.runCommand,
     getRequestyConfig,
     updateModelsJson,
     discoverModels,
@@ -338,10 +376,29 @@ async function getArgumentCompletions(command: TestCommand, prefix: string) {
   return command.getArgumentCompletions(prefix)
 }
 
-function expectAllNotificationsPrefixed(notifications: Array<{ message: string }>) {
-  for (const notification of notifications) {
-    expect(notification.message).toMatch(new RegExp(`^${COMMAND_NAME}:`))
+function createFakeNotifier() {
+  const notifications: Array<{ message: string; type?: NotificationLevel }> = []
+  const notifier: Notifier = {
+    notify(message, type) {
+      notifications.push({ message, type })
+    },
   }
+
+  return { notifier, capturedNotifications: notifications }
+}
+
+function createFakeStatusReporter() {
+  const statuses: Array<string | undefined> = []
+  const status: StatusReporter = {
+    set(message) {
+      statuses.push(message)
+    },
+    clear() {
+      statuses.push(undefined)
+    },
+  }
+
+  return { status, capturedStatuses: statuses }
 }
 
 function createHealthCheckResult(overrides: Partial<HealthCheckResult> = {}): HealthCheckResult {
