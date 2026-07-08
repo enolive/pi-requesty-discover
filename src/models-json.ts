@@ -56,8 +56,10 @@ export function getRequestyConfig(envConfig: Env = getEnv()): RequestyConfig {
 }
 
 export function updateModelsJson(data: ModelsJson, models: ProviderModelConfig[], envConfig: Env = getEnv()): void {
+  const provider = data.providers[envConfig.provider_id]
   data.providers[envConfig.provider_id] = {
-    ...data.providers[envConfig.provider_id],
+    ...provider,
+    apiKey: nonEmptyString(provider.apiKey) ?? '$REQUESTY_API_KEY',
     models: models.map(model => ({
       id: model.id,
       name: model.name,
