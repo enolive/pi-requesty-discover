@@ -17,7 +17,7 @@ interface AutocompleteItem {
 export type NotificationLevel = 'info' | 'warning' | 'error'
 
 export type Notifier = {
-  notify(message: string, level?: NotificationLevel): void
+  notify(message: string, level: NotificationLevel): void
 }
 
 export type StatusReporter = {
@@ -62,7 +62,7 @@ export async function runCommand(args: string, status: StatusReporter, notifier:
   const parts = args.split(' ')
   const dryRun = parts.includes(DRY_RUN_ARG)
   if (dryRun) {
-    notifier.notify('running in dry mode, no changes will be done', undefined)
+    notifier.notify('running in dry mode, no changes will be done', 'info')
   }
 
   try {

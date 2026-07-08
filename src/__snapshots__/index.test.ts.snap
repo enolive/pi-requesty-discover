@@ -36,7 +36,7 @@ exports[`command flow > emits notification and does not update models.json on dr
 [
   {
     "message": "running in dry mode, no changes will be done",
-    "type": undefined,
+    "type": "info",
   },
   {
     "message": "Discovered 1 Requesty model(s).
