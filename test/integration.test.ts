@@ -85,7 +85,7 @@ describe('requesty-models-discover integration', () => {
     extension.default(pi)
     const command = commands.get(COMMAND_NAME)
     expect(command).toBeDefined()
-    const { ctx, notifications, statuses } = createFakeCommandContext()
+    const { ctx, notifications } = createFakeCommandContext({ mode: 'tui' })
 
     await command!.handler('', ctx)
 
@@ -105,7 +105,6 @@ describe('requesty-models-discover integration', () => {
     expect(notifications[0].type).toBe('info')
     expect(notifications[0].message).toContain(`${COMMAND_NAME}: Discovered 2 Requesty model(s).`)
     expect(notifications[0].message).toContain('Run /reload to use models.json changes.')
-    expect(statuses.at(-1)).toEqual({ key: COMMAND_NAME, text: undefined })
   })
 })
 

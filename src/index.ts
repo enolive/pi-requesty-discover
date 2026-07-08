@@ -14,9 +14,13 @@ interface AutocompleteItem {
   description: string
 }
 
-type NotificationLevel = 'info' | 'warning' | 'error'
+export type NotificationLevel = 'info' | 'warning' | 'error'
 
-type StatusReporter = {
+export type Notifier = {
+  notify(message: string, level?: NotificationLevel): void
+}
+
+export type StatusReporter = {
   set(message: string): void
   clear(): void
 }
@@ -27,7 +31,7 @@ export default function (pi: ExtensionAPI) {
     description: 'Dynamically discover Requesty models, run health checks, and update the local models.json.',
     getArgumentCompletions,
     handler: async (args, ctx) => {
-      await runWithStatusUi(ctx, 'Discovering models...', status => runCommand(args, ctx, status))
+      await runWithStatusUi(ctx, 'Discovering models...', (status, notifier) => runCommand(args, status, notifier))
     },
   })
 }
@@ -35,60 +39,30 @@ export default function (pi: ExtensionAPI) {
 async function runWithStatusUi<T>(
   ctx: ExtensionCommandContext,
   initialMessage: string,
-  fn: (status: StatusReporter) => Promise<T>,
+  fn: (status: StatusReporter, notifier: Notifier) => Promise<T>,
 ): Promise<T> {
   if (ctx.mode !== 'tui') {
-    return fn(createFooterStatusReporter(ctx))
+    return fn(createNoopStatusReporter(), createNoopNotifier())
   }
 
   return ctx.ui.custom<T>((_tui, theme, _kb, done) => {
     const loader = new RequestyStatusLoader(_tui, theme, initialMessage)
+    const notifier = createUiNotifier(ctx)
     const status = createLoaderStatusReporter(loader)
-    fn(status).then(done).catch(done)
+    void Promise.resolve()
+      .then(() => fn(status, notifier))
+      .then(done)
+      .catch(done)
     return loader
   })
 }
 
-function createFooterStatusReporter(ctx: ExtensionCommandContext): StatusReporter {
-  return {
-    set(message: string) {
-      ctx.ui.setStatus(COMMAND_NAME, message)
-    },
-    clear() {
-      ctx.ui.setStatus(COMMAND_NAME, undefined)
-    },
-  }
-}
-
-function createLoaderStatusReporter(loader: RequestyStatusLoader): StatusReporter {
-  return {
-    set(message: string) {
-      loader.setMessage(message)
-    },
-    clear() {
-      // Nothing to clear: the loader closes when ctx.ui.custom() resolves.
-    },
-  }
-}
-
-function getArgumentCompletions(prefix: string): AutocompleteItem[] {
-  const options = [
-    {
-      value: DRY_RUN_ARG,
-      label: DRY_RUN_ARG,
-      description: 'Preview without writing into the new model.json file',
-    },
-  ]
-  if (!prefix) return options
-  return options.filter(o => o.value.toLowerCase().startsWith(prefix.toLowerCase()))
-}
-
-async function runCommand(args: string, ctx: ExtensionCommandContext, status: StatusReporter): Promise<void> {
+export async function runCommand(args: string, status: StatusReporter, notifier: Notifier): Promise<void> {
   status.set('Discovering Requesty models...')
   const parts = args.split(' ')
   const dryRun = parts.includes(DRY_RUN_ARG)
   if (dryRun) {
-    notify(ctx, 'running in dry mode, no changes will be done')
+    notifier.notify('running in dry mode, no changes will be done', undefined)
   }
 
   try {
@@ -131,20 +105,66 @@ async function runCommand(args: string, ctx: ExtensionCommandContext, status: St
     const message = `Discovered ${models.length} Requesty model(s).\n${healthCheckSummary}${logNote}${writeNote}`
 
     if (failed.length === 0) {
-      notify(ctx, message, 'info')
+      notifier.notify(message, 'info')
     } else if (failed.length < models.length) {
-      notify(ctx, message, 'warning')
+      notifier.notify(message, 'warning')
     } else {
-      notify(ctx, message, 'error')
+      notifier.notify(message, 'error')
     }
   } catch (error) {
-    notify(ctx, `Discovery failed: ${error instanceof Error ? error.message : String(error)}`, 'error')
+    notifier.notify(`Discovery failed: ${error instanceof Error ? error.message : String(error)}`, 'error')
   } finally {
     status.clear()
   }
 }
 
-function notify(ctx: ExtensionCommandContext, message: string, level?: NotificationLevel): void {
-  const prefixedMessage = `${COMMAND_NAME}: ${message}`
-  ctx.ui.notify(prefixedMessage, level)
+function getArgumentCompletions(prefix: string): AutocompleteItem[] {
+  const options = [
+    {
+      value: DRY_RUN_ARG,
+      label: DRY_RUN_ARG,
+      description: 'Preview without writing into the new model.json file',
+    },
+  ]
+  if (!prefix) return options
+  return options.filter(o => o.value.toLowerCase().startsWith(prefix.toLowerCase()))
+}
+
+function createNoopStatusReporter(): StatusReporter {
+  return {
+    set() {
+      // Status output is only rendered in TUI mode.
+    },
+    clear() {
+      // Status output is only rendered in TUI mode.
+    },
+  }
+}
+
+function createNoopNotifier(): Notifier {
+  return {
+    notify() {
+      // Notifications are only rendered in TUI mode.
+    },
+  }
+}
+
+function createUiNotifier(ctx: ExtensionCommandContext): Notifier {
+  return {
+    notify(message: string, level?: NotificationLevel) {
+      const prefixedMessage = `${COMMAND_NAME}: ${message}`
+      ctx.ui.notify(prefixedMessage, level)
+    },
+  }
+}
+
+function createLoaderStatusReporter(loader: RequestyStatusLoader): StatusReporter {
+  return {
+    set(message: string) {
+      loader.setMessage(message)
+    },
+    clear() {
+      // Nothing to clear: the loader closes when ctx.ui.custom() resolves.
+    },
+  }
 }
