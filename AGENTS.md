@@ -4,7 +4,8 @@ Development notes for coding agents working on this repository.
 
 ## Project overview
 
-*pi-requesty-discover* is a Pi Coding Agent package/extension for discovering available Requesty models, optionally health-checking them, and updating Pi's local *models.json*.
+*pi-requesty-discover* is a Pi Coding Agent package/extension for discovering available Requesty models, optionally
+health-checking them, and updating Pi's local *models.json*.
 
 Pi loads the extension directly from TypeScript through the package manifest:
 
@@ -19,7 +20,9 @@ Pi loads the extension directly from TypeScript through the package manifest:
 }
 ```
 
-`index.ts` is a small public entrypoint that re-exports the implementation from `src/index.ts`, so installed-package provenance displays a useful path. Keep the implementation in `src/` unless there is a good reason to change the package entrypoint.
+`index.ts` is a small public entrypoint that re-exports the implementation from `src/index.ts`, so installed-package
+provenance displays a useful path. Keep the implementation in `src/` unless there is a good reason to change the package
+entrypoint.
 
 Do **not** add a build/transpile step unless explicitly requested.
 
@@ -40,7 +43,8 @@ Do **not** add a build/transpile step unless explicitly requested.
 
 ## Conventions
 
-- Follow test-driven development for behavior-changing code: **red, green, refactor**. Add or update the test that exposes the issue or missing behavior, verify it fails for the right reason, then implement the change and clean up.
+- Follow test-driven development for behavior-changing code: **red, green, refactor**. Add or update the test that
+  exposes the issue or missing behavior, verify it fails for the right reason, then implement the change and clean up.
 - Use TypeScript for source files.
 - Keep imports extensionless inside `src`, e.g. `import env from './env'`.
 - Use Pi's exported types where available, especially:
@@ -55,15 +59,17 @@ Do **not** add a build/transpile step unless explicitly requested.
 - Keep all environment/path access centralized in `src/env.ts`.
 - Keep the Pi command name centralized in `src/index.ts` as `COMMAND_NAME`.
 - `REQUESTY_HEALTH_CHECK_MODE` is validated as `off | basic | full`.
+- The main doc entrypoint for this project is `README.adoc`. Any possibly existing *README.md* is just auto-generated
+  and should not be edited.
 
 ## Development commands
 
 Run these before handing off changes:
 
 ```bash
-npm run format:check
-npm run typecheck
-npm run lint
+# linting and format checking all-in-one
+npm run check
+# run all tests
 npm test
 ```
 
@@ -81,10 +87,13 @@ To release a new version (human-only, do not run automatically):
 npm run release
 ```
 
-This bumps the version in `package.json`, creates a git tag, and pushes both. The publish workflow automatically publishes to npm when a `v*` tag is pushed.
+This bumps the version in `package.json`, creates a git tag, and pushes both. The publish workflow automatically
+publishes to npm when a `v*` tag is pushed.
 
 ## Package notes
 
-Published files are controlled by `.npmignore` (npm uses its default ignores plus any rules listed there). Test files are excluded automatically.
+Published files are controlled by `.npmignore` (npm uses its default ignores plus any rules listed there). Test files
+are excluded automatically.
 
-Runtime dependencies belong in `dependencies`; development-only tools belong in `devDependencies`. Pi-provided packages such as `@earendil-works/pi-coding-agent` should stay in `peerDependencies` with a `"*"` range.
+Runtime dependencies belong in `dependencies`; development-only tools belong in `devDependencies`. Pi-provided packages
+such as `@earendil-works/pi-coding-agent` should stay in `peerDependencies` with a `"*"` range.

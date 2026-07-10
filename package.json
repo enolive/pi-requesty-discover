@@ -23,7 +23,7 @@
   ],
   "scripts": {
     "check": "npm run agent-lint && npm run format:check && npm run typecheck && npm run lint",
-    "agent-lint": "agnix . -v",
+    "agent-lint": "agnix . -v --strict",
     "format:check": "prettier --check src test",
     "format": "prettier --write src test",
     "typecheck": "tsc --noEmit",
