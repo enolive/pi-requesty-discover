@@ -81,14 +81,12 @@ npm run format
 
 ## Publishing
 
-To release a new version (human-only, do not run automatically):
-
-```bash
-npm run release
-```
-
-This bumps the version in `package.json`, creates a git tag, and pushes both. The publish workflow automatically
-publishes to npm when a `v*` tag is pushed.
+Releasing a new version is a human-only task. Do not run the release script under
+any circumstances, including with extra flags — ask the user to run it
+themselves. `npm run release` prompts for a `y/N` confirmation before bumping
+the version, tagging, and pushing; do not answer that prompt on the user's
+behalf. Publishing to npm itself is a separate manual step and is not
+automated by CI.
 
 ## Package notes
 
