@@ -24,8 +24,8 @@
   "scripts": {
     "check": "npm run agent-lint && npm run format:check && npm run typecheck && npm run lint",
     "agent-lint": "agnix . -v --strict",
-    "format:check": "prettier --check src test",
-    "format": "prettier --write src test",
+    "format:check": "prettier --check .",
+    "format": "prettier --write .",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "release": "npm version patch && git push --follow-tags",
