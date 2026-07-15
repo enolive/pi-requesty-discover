@@ -72,16 +72,15 @@ describe('getEnv', () => {
     expect(createEnv).toThrow(/apiKey must be set via REQUESTY_API_KEY env var/)
   })
 
-  it('uses provided homeDir in PI_CODING_AGENT_DIR', () => {
+  it('uses provided homeDir', () => {
     process.env.PI_CODING_AGENT_DIR = TEST_HOME_DIR
-
     const envConfig = getEnv()
 
     expect(envConfig.models_json_path).toBe(`${TEST_HOME_DIR}/models.json`)
     expect(envConfig.health_check_log_path).toBe(`${TEST_HOME_DIR}/requesty-health-check.log`)
   })
 
-  it('falls back to default homeDir when PI_CODING_AGENT_DIR is not provided', () => {
+  it('falls back the config dir provided by pi', () => {
     const defaultHomeDir = os.homedir()
     delete process.env.PI_CODING_AGENT_DIR
 
