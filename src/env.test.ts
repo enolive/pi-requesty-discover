@@ -80,7 +80,7 @@ describe('getEnv', () => {
     expect(envConfig.health_check_log_path).toBe(`${TEST_HOME_DIR}/requesty-health-check.log`)
   })
 
-  it('falls back the config dir provided by pi', () => {
+  it('falls back to the config dir provided by pi', () => {
     const defaultHomeDir = os.homedir()
     delete process.env.PI_CODING_AGENT_DIR
 
