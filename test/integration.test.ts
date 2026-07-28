@@ -68,16 +68,7 @@ describe('requesty-models-discover integration', () => {
       }),
       http.post(`${BASE_URL}/chat/completions`, ({ request }) => {
         usedAuthKeys.push(request.headers.get('authorization') ?? '')
-        return HttpResponse.json({
-          choices: [
-            {
-              message: {
-                role: 'assistant',
-                content: 'OK',
-              },
-            },
-          ],
-        })
+        return sseOk()
       }),
     )
     const extension = await import('../src/index')
@@ -132,4 +123,17 @@ async function writeInitialModelsJson(modelsJsonPath: string): Promise<void> {
 
 async function readJson(path: string): Promise<unknown> {
   return JSON.parse(await fs.readFile(path, 'utf8')) as unknown
+}
+
+function sseOk() {
+  const encoded = new TextEncoder().encode(
+    `data: ${JSON.stringify({ choices: [{ delta: { content: 'OK' } }] })}\n\ndata: [DONE]\n\n`,
+  )
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(encoded)
+      controller.close()
+    },
+  })
+  return new HttpResponse(stream, { headers: { 'content-type': 'text/event-stream' } })
 }

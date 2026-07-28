@@ -27,13 +27,13 @@ const CHAT_BODY = {
   messages: [{ role: 'user', content: 'Say OK' }],
 }
 
-const positiveResponse = { choices: [{ message: { role: 'assistant', content: 'OK' } }] }
+const positiveStreamChunk = { choices: [{ delta: { content: 'OK' } }] }
 
 describe('postChatCompletion', () => {
   it('returns ok for response with non-empty choices', async () => {
     server.use(
       http.post(completionsEndpoint, () => {
-        return HttpResponse.json(positiveResponse)
+        return sseResponse([positiveStreamChunk])
       }),
     )
 
@@ -60,7 +60,7 @@ describe('postChatCompletion', () => {
     })
   })
 
-  it('returns failure for HTTP with empty response body', async () => {
+  it('returns failure for HTTP error with empty response body', async () => {
     server.use(
       http.post(completionsEndpoint, () => {
         return HttpResponse.text('', {
@@ -98,23 +98,10 @@ describe('postChatCompletion', () => {
     })
   })
 
-  it('returns failure when successful response body is not valid JSON', async () => {
+  it('returns failure when successful response body is not valid SSE', async () => {
     server.use(
       http.post(completionsEndpoint, () => {
-        return HttpResponse.text('not json', { status: 200, statusText: 'OK' })
-      }),
-    )
-
-    const result = await postChatCompletion(PROVIDER, CHAT_BODY)
-
-    expect(result.ok).toBe(false)
-    expect(result.error).toMatch(/SyntaxError/)
-  })
-
-  it('returns failure for empty choices', async () => {
-    server.use(
-      http.post(completionsEndpoint, () => {
-        return HttpResponse.json({ choices: [] })
+        return sseRawResponse('not json')
       }),
     )
 
@@ -122,14 +109,14 @@ describe('postChatCompletion', () => {
 
     expect(result).toMatchObject({
       ok: false,
-      error: 'Empty choices in response',
+      error: 'Stream ended without content',
     })
   })
 
-  it('returns failure for malformed response', async () => {
+  it('returns failure for stream with only empty choices chunks', async () => {
     server.use(
       http.post(completionsEndpoint, () => {
-        return HttpResponse.json({ choices: 'not-an-array' })
+        return sseResponse([{ choices: [] }])
       }),
     )
 
@@ -137,7 +124,22 @@ describe('postChatCompletion', () => {
 
     expect(result).toMatchObject({
       ok: false,
-      error: 'Empty choices in response',
+      error: 'Stream ended without content',
+    })
+  })
+
+  it('returns failure for stream with malformed choices chunk', async () => {
+    server.use(
+      http.post(completionsEndpoint, () => {
+        return sseResponse([{ choices: 'not-an-array' }])
+      }),
+    )
+
+    const result = await postChatCompletion(PROVIDER, CHAT_BODY)
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: 'Stream ended without content',
     })
   })
 
@@ -146,7 +148,7 @@ describe('postChatCompletion', () => {
     server.use(
       http.post(completionsEndpoint, ({ request }) => {
         authorizationHeader = request.headers.get('authorization')
-        return HttpResponse.json(positiveResponse)
+        return sseResponse([positiveStreamChunk])
       }),
     )
 
@@ -160,7 +162,7 @@ describe('postChatCompletion', () => {
     server.use(
       http.post(completionsEndpoint, async ({ request }) => {
         requestBody = await request.json()
-        return HttpResponse.json(positiveResponse)
+        return sseResponse([positiveStreamChunk])
       }),
     )
 
@@ -169,13 +171,128 @@ describe('postChatCompletion', () => {
     expect(requestBody).toMatchObject({ model: 'requesty/test-model' })
   })
 
+  it('sends stream:true in request body', async () => {
+    let requestBody: unknown
+    server.use(
+      http.post(completionsEndpoint, async ({ request }) => {
+        requestBody = await request.json()
+        return sseResponse([positiveStreamChunk])
+      }),
+    )
+
+    await postChatCompletion(PROVIDER, CHAT_BODY)
+
+    expect(requestBody).toMatchObject({ stream: true })
+  })
+
+  it('sends Accept: text/event-stream header', async () => {
+    let acceptHeader: string | null = null
+    server.use(
+      http.post(completionsEndpoint, ({ request }) => {
+        acceptHeader = request.headers.get('accept')
+        return sseResponse([positiveStreamChunk])
+      }),
+    )
+
+    await postChatCompletion(PROVIDER, CHAT_BODY)
+
+    expect(acceptHeader).toBe('text/event-stream')
+  })
+
+  it('returns ok after the first content chunk of a multi-chunk stream', async () => {
+    server.use(
+      http.post(completionsEndpoint, () => {
+        return sseResponse([
+          { choices: [{ delta: { role: 'assistant' } }] },
+          { choices: [{ delta: { content: 'OK' } }] },
+          { choices: [{ delta: {}, finish_reason: 'stop' }] },
+        ])
+      }),
+    )
+
+    const result = await postChatCompletion(PROVIDER, CHAT_BODY)
+
+    expect(result.ok).toBe(true)
+  })
+
+  it('returns ok without requiring a [DONE] marker', async () => {
+    server.use(
+      http.post(completionsEndpoint, () => {
+        return sseRawResponse(`data: ${JSON.stringify(positiveStreamChunk)}\n\n`)
+      }),
+    )
+
+    const result = await postChatCompletion(PROVIDER, CHAT_BODY)
+
+    expect(result.ok).toBe(true)
+  })
+
+  it('returns failure when stream ends with [DONE] and no content chunk', async () => {
+    server.use(
+      http.post(completionsEndpoint, () => {
+        return sseRawResponse('data: [DONE]\n\n')
+      }),
+    )
+
+    const result = await postChatCompletion(PROVIDER, CHAT_BODY)
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: 'Stream ended without content',
+    })
+  })
+
+  it('returns failure when stream body is empty', async () => {
+    server.use(
+      http.post(completionsEndpoint, () => {
+        return sseRawResponse('')
+      }),
+    )
+
+    const result = await postChatCompletion(PROVIDER, CHAT_BODY)
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: 'Stream ended without content',
+    })
+  })
+
+  it('returns failure for a non-timeout network error', async () => {
+    server.use(
+      http.post(completionsEndpoint, () => {
+        return HttpResponse.error()
+      }),
+    )
+
+    const result = await postChatCompletion(PROVIDER, CHAT_BODY)
+
+    expect(result).toMatchObject({ ok: false })
+    expect(result.ok).toBe(false)
+    expect(result.error).not.toMatch(/^Timed out/)
+  })
+
+  it('returns failure for stream emitting an error object without content', async () => {
+    server.use(
+      http.post(completionsEndpoint, () => {
+        return sseResponse([{ error: { message: 'upstream blew up' } }])
+      }),
+    )
+
+    const result = await postChatCompletion(PROVIDER, CHAT_BODY)
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: 'Stream ended without content',
+    })
+  })
+
   it('retries timeout failures', async () => {
     let requestCount = 0
     server.use(
       http.post(completionsEndpoint, async () => {
         requestCount++
         await delay(50)
-        return HttpResponse.json(positiveResponse)
+        return sseResponse([positiveStreamChunk])
       }),
     )
 
@@ -198,7 +315,7 @@ describe('postChatCompletion', () => {
       http.post(completionsEndpoint, async () => {
         requestCount++
         await delay(50)
-        return HttpResponse.json(positiveResponse)
+        return sseResponse([positiveStreamChunk])
       }),
     )
 
@@ -222,7 +339,7 @@ describe('checkModels', () => {
     server.use(
       http.post(completionsEndpoint, async ({ request }) => {
         requestBodies.push(await request.json())
-        return HttpResponse.json(positiveResponse)
+        return sseResponse([positiveStreamChunk])
       }),
     )
     const models = [createModel({ id: 'requesty/model-a' }), createModel({ id: 'requesty/model-b' })]
@@ -237,7 +354,7 @@ describe('checkModels', () => {
     server.use(
       http.post(completionsEndpoint, async ({ request }) => {
         requestBodies.push(await request.json())
-        return HttpResponse.json(positiveResponse)
+        return sseResponse([positiveStreamChunk])
       }),
     )
     const models = [createModel({ id: 'requesty/reasoning-model', reasoning: true })]
@@ -255,7 +372,7 @@ describe('checkModels', () => {
         if (requestNumber > 1) {
           return HttpResponse.text('BAM', { status: 418 })
         }
-        return HttpResponse.json(positiveResponse)
+        return sseResponse([positiveStreamChunk])
       }),
     )
     const models = [createModel({ id: 'requesty/reasoning-model', reasoning: true })]
@@ -278,7 +395,7 @@ describe('checkModels', () => {
     server.use(
       http.post(completionsEndpoint, async ({ request }) => {
         requestBodies.push(await request.json())
-        return HttpResponse.json(positiveResponse)
+        return sseResponse([positiveStreamChunk])
       }),
     )
     const models = [createModel({ id: 'requesty/non-reasoning-model', reasoning: false })]
@@ -311,7 +428,7 @@ describe('checkModels', () => {
   it('returns result objects with modelId', async () => {
     server.use(
       http.post(completionsEndpoint, () => {
-        return HttpResponse.json(positiveResponse)
+        return sseResponse([positiveStreamChunk])
       }),
     )
     const models = [createModel({ id: 'requesty/model-a' }), createModel({ id: 'requesty/model-b' })]
@@ -333,7 +450,7 @@ describe('checkModels', () => {
         if (body.model === 'requesty/model-b') {
           return HttpResponse.text('model failed', { status: 500, statusText: 'Internal Server Error' })
         }
-        return HttpResponse.json(positiveResponse)
+        return sseResponse([positiveStreamChunk])
       }),
     )
     const models = [
@@ -384,7 +501,7 @@ describe('checkModels', () => {
         maxActiveRequests = Math.max(maxActiveRequests, activeRequests)
         await delay(50)
         activeRequests--
-        return HttpResponse.json(positiveResponse)
+        return sseResponse([positiveStreamChunk])
       }),
     )
     const models = [
@@ -407,7 +524,7 @@ describe('checkModels', () => {
         if (body.model === 'requesty/model-b') {
           return HttpResponse.text('model failed', { status: 500, statusText: 'Internal Server Error' })
         }
-        return HttpResponse.json(positiveResponse)
+        return sseResponse([positiveStreamChunk])
       }),
     )
     const models = [
@@ -540,4 +657,25 @@ function createModel(overrides: Partial<ProviderModelConfig> = {}): ProviderMode
     maxTokens: 4096,
     ...overrides,
   }
+}
+
+function sseBody(chunks: unknown[]): string {
+  return [...chunks.map(chunk => `data: ${JSON.stringify(chunk)}\n\n`), 'data: [DONE]\n\n'].join('')
+}
+
+function sseRawResponse(body: string) {
+  const encoded = new TextEncoder().encode(body)
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      if (encoded.length > 0) {
+        controller.enqueue(encoded)
+      }
+      controller.close()
+    },
+  })
+  return new HttpResponse(stream, { headers: { 'content-type': 'text/event-stream' } })
+}
+
+function sseResponse(chunks: unknown[]) {
+  return sseRawResponse(sseBody(chunks))
 }
