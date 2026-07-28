@@ -1,7 +1,6 @@
 import type { ProviderModelConfig } from '@earendil-works/pi-coding-agent'
 import fs from 'node:fs'
 import path from 'node:path'
-import { z } from 'zod'
 import { getEnv, type Env } from './env'
 
 const HEALTH_CHECK_CONCURRENCY = 10
@@ -16,9 +15,7 @@ const defaultHealthCheckOptions = {
   retryDelayMs: HEALTH_CHECK_RETRY_DELAY_MS,
 }
 
-const ChatCompletionResponseSchema = z.object({
-  choices: z.array(z.unknown()).min(1),
-})
+const DATA_PREFIX = 'data:'
 
 export type Provider = {
   baseUrl: string
@@ -138,48 +135,92 @@ export function writeHealthCheckLog(provider: Provider, results: HealthCheckResu
 
 export async function postChatCompletion(
   provider: Provider,
-  body: unknown,
+  body: Record<string, unknown>,
   options: HealthCheckOptions = {},
 ): Promise<ModelCheckResult> {
   const healthCheckOptions = resolveHealthCheckOptions(options)
   const start = Date.now()
-  try {
-    const response = await fetchWithTimeoutRetries(
-      `${provider.baseUrl}/chat/completions`,
-      {
+
+  for (let attempt = 0; attempt <= healthCheckOptions.retries; attempt++) {
+    try {
+      const response = await fetch(`${provider.baseUrl}/chat/completions`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${provider.apiKey}`,
           'Content-Type': 'application/json',
+          Accept: 'text/event-stream',
         },
-        body: JSON.stringify(body),
-      },
-      healthCheckOptions,
-    )
+        body: JSON.stringify({ ...body, stream: true }),
+        signal: AbortSignal.timeout(healthCheckOptions.timeoutMs),
+      })
 
-    const latencyMs = Date.now() - start
+      const latencyMs = Date.now() - start
 
-    if (!response.ok) {
-      const text = await response.text().catch(() => '')
-      return { ok: false, latencyMs, error: `HTTP ${response.status} ${response.statusText}${text ? `: ${text}` : ''}` }
+      if (!response.ok) {
+        const text = await response.text().catch(() => '')
+        return {
+          ok: false,
+          latencyMs,
+          error: `HTTP ${response.status} ${response.statusText}${text ? `: ${text}` : ''}`,
+        }
+      }
+
+      return await verifyFirstStreamChunk(response.body!, start)
+    } catch (err) {
+      if (isTimeoutError(err) && attempt < healthCheckOptions.retries) {
+        if (healthCheckOptions.retryDelayMs > 0) {
+          await new Promise(resolve => setTimeout(resolve, healthCheckOptions.retryDelayMs))
+        }
+        continue
+      }
+      const attempts = attempt + 1
+      return {
+        ok: false,
+        latencyMs: Date.now() - start,
+        error: isTimeoutError(err)
+          ? `Timed out after ${attempts} attempt(s); per-attempt timeout is ${healthCheckOptions.timeoutMs / 1000}s`
+          : String(err),
+      }
     }
+  }
 
-    const result = ChatCompletionResponseSchema.safeParse(await response.json())
-    if (!result.success) {
-      return { ok: false, latencyMs, error: 'Empty choices in response' }
-    }
+  return { ok: false, latencyMs: Date.now() - start, error: 'Unknown error' }
+}
 
-    return { ok: true, latencyMs }
-  } catch (err) {
-    const latencyMs = Date.now() - start
-    const attempts = healthCheckOptions.retries + 1
-    return {
-      ok: false,
-      latencyMs,
-      error: isTimeoutError(err)
-        ? `Timed out after ${attempts} attempt(s); per-attempt timeout is ${healthCheckOptions.timeoutMs / 1000}s`
-        : String(err),
+async function verifyFirstStreamChunk(body: ReadableStream<Uint8Array>, start: number): Promise<ModelCheckResult> {
+  const reader = body.getReader()
+  const decoder = new TextDecoder()
+  let tail = ''
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) {
+        break
+      }
+      tail += decoder.decode(value, { stream: true })
+      const lines = tail.split('\n')
+      tail = lines.pop()!
+      for (const line of lines) {
+        if (!line.startsWith(DATA_PREFIX)) {
+          continue
+        }
+        const payload = line.slice(DATA_PREFIX.length).trim()
+        if (payload === '[DONE]') {
+          continue
+        }
+        try {
+          const parsed = JSON.parse(payload) as { choices?: unknown }
+          if (Array.isArray(parsed.choices) && parsed.choices.length > 0) {
+            return { ok: true, latencyMs: Date.now() - start }
+          }
+        } catch {
+          // partial JSON or non-choices chunk — keep reading
+        }
+      }
     }
+    return { ok: false, latencyMs: Date.now() - start, error: 'Stream ended without content' }
+  } finally {
+    await reader.cancel()
   }
 }
 
@@ -245,34 +286,6 @@ function resolveHealthCheckOptions(options: HealthCheckOptions): ResolvedHealthC
   return {
     ...defaultHealthCheckOptions,
     ...options,
-  }
-}
-
-async function fetchWithTimeoutRetries(
-  url: string,
-  options: RequestInit,
-  { timeoutMs, retries, retryDelayMs }: ResolvedHealthCheckOptions,
-) {
-  function sleep(ms: number) {
-    if (ms <= 0) {
-      return
-    }
-    return new Promise(resolve => setTimeout(resolve, ms))
-  }
-
-  for (let attempt = 0; ; attempt++) {
-    try {
-      return await fetch(url, {
-        ...options,
-        signal: AbortSignal.timeout(timeoutMs),
-      })
-    } catch (error) {
-      if (!isTimeoutError(error) || attempt >= retries) {
-        throw error
-      }
-
-      await sleep(retryDelayMs)
-    }
   }
 }
 
