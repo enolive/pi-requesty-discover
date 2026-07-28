@@ -220,7 +220,7 @@ async function verifyFirstStreamChunk(body: ReadableStream<Uint8Array>, start: n
     }
     return { ok: false, latencyMs: Date.now() - start, error: 'Stream ended without content' }
   } finally {
-    await reader.cancel().catch(() => {})
+    await reader.cancel()
   }
 }
 
