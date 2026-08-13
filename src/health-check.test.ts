@@ -608,7 +608,7 @@ describe('health summary and log output', () => {
     ]
     const env: Env = { ...envPrototype, health_check_log_path: tempDirectory.healthCheckLogPath }
 
-    writeHealthCheckLog(PROVIDER, partialFailureResults, env)
+    writeHealthCheckLog(PROVIDER, partialFailureResults, { added: [], removed: [] }, env)
 
     const log = await fs.readFile(tempDirectory.healthCheckLogPath, 'utf8')
     expect(normalizeHealthCheckLog(log)).toMatchSnapshot()
@@ -621,7 +621,22 @@ describe('health summary and log output', () => {
     ]
     const env: Env = { ...envPrototype, health_check_log_path: tempDirectory.healthCheckLogPath }
 
-    writeHealthCheckLog(PROVIDER, successfulResults, env)
+    writeHealthCheckLog(PROVIDER, successfulResults, { added: [], removed: [] }, env)
+
+    const log = await fs.readFile(tempDirectory.healthCheckLogPath, 'utf8')
+    expect(normalizeHealthCheckLog(log)).toMatchSnapshot()
+  })
+
+  it('writes added and removed models into the log', async () => {
+    const results = [createHealthCheckResult({ modelId: 'requesty/model-a', ok: true })]
+    const env: Env = { ...envPrototype, health_check_log_path: tempDirectory.healthCheckLogPath }
+
+    writeHealthCheckLog(
+      PROVIDER,
+      results,
+      { added: ['requesty/model-a', 'requesty/model-new'], removed: ['requesty/model-old'] },
+      env,
+    )
 
     const log = await fs.readFile(tempDirectory.healthCheckLogPath, 'utf8')
     expect(normalizeHealthCheckLog(log)).toMatchSnapshot()

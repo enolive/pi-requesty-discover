@@ -3,7 +3,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { Env } from './env'
-import { getRequestyConfig, updateModelsJson } from './models-json'
+import { diffModels, getRequestyConfig, updateModelsJson } from './models-json'
 import { createTempDirectory, type TempDirectory } from '../test/helpers/temp-agent'
 
 type TestProvider = Record<string, unknown> & { models?: unknown }
@@ -108,6 +108,54 @@ describe('getRequestyConfig', () => {
     const config = getRequestyConfig(envConfig)
 
     expect(config.provider.baseUrl).toBe('https://router.requesty.ai/v1')
+  })
+
+  it('exposes existing model IDs of the selected provider', async () => {
+    const envConfig = await createEnvWithModelsJson(tempDirectory, {
+      providers: {
+        'requesty-export': {
+          apiKey: 'models-json-key',
+          models: [{ id: 'requesty/model-a' }, { id: 'requesty/model-b', name: 'Model B' }],
+        },
+      },
+    })
+
+    const config = getRequestyConfig(envConfig)
+
+    expect(config.existingModelIds).toEqual(['requesty/model-a', 'requesty/model-b'])
+  })
+
+  it('exposes empty existing model IDs when provider has no models', async () => {
+    const envConfig = await createEnvWithModelsJson(tempDirectory, {
+      providers: { 'requesty-export': { apiKey: 'models-json-key' } },
+    })
+
+    const config = getRequestyConfig(envConfig)
+
+    expect(config.existingModelIds).toEqual([])
+  })
+})
+
+describe('diffModels', () => {
+  it('reports no changes for identical sets', () => {
+    const diff = diffModels(['a', 'b'], [createModel({ id: 'a' }), createModel({ id: 'b' })])
+
+    expect(diff).toEqual({ added: [], removed: [] })
+  })
+
+  it('reports added and removed model IDs sorted', () => {
+    const diff = diffModels(
+      ['z', 'b', 'x'],
+      [createModel({ id: 'b' }), createModel({ id: 'c' }), createModel({ id: 'a' })],
+    )
+
+    expect(diff).toEqual({ added: ['a', 'c'], removed: ['x', 'z'] })
+  })
+
+  it('reports everything as added when there were no previous models', () => {
+    const diff = diffModels([], [createModel({ id: 'a' })])
+
+    expect(diff).toEqual({ added: ['a'], removed: [] })
   })
 })
 

@@ -304,7 +304,7 @@ async function loadExtension(options: LoadExtensionOptions = {}) {
   if (options.getRequestyConfigError) {
     getRequestyConfig.mockThrow(options.getRequestyConfigError)
   } else {
-    getRequestyConfig.mockReturnValue({ data: modelsJson, provider })
+    getRequestyConfig.mockReturnValue({ data: modelsJson, provider, existingModelIds: [] })
   }
   const updateModelsJson = vi.mocked(ModelsJsonModule.updateModelsJson)
   const discoverModels = vi.mocked(RequestyApiModule.discoverModels)

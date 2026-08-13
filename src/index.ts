@@ -1,6 +1,6 @@
 import { ExtensionAPI, ExtensionCommandContext, ProviderModelConfig } from '@earendil-works/pi-coding-agent'
 import { getEnv } from './env'
-import { getRequestyConfig, updateModelsJson } from './models-json'
+import { diffModels, getRequestyConfig, updateModelsJson } from './models-json'
 import { discoverModels } from './requesty-api'
 import { checkModels, formatHealthSummary, writeHealthCheckLog } from './health-check'
 import { RequestyStatusLoader } from './ui/requesty-status-loader.ts'
@@ -67,7 +67,7 @@ export async function runCommand(args: string, status: StatusReporter, notifier:
 
   try {
     const env = getEnv()
-    const { data, provider } = getRequestyConfig(env)
+    const { data, provider, existingModelIds } = getRequestyConfig(env)
     const models = await discoverModels(provider)
     const modelsMap = new Map(models.map(m => [m.id, m]))
 
@@ -90,7 +90,7 @@ export async function runCommand(args: string, status: StatusReporter, notifier:
         return r.ok && model ? [model] : []
       })
       healthCheckSummary = formatHealthSummary(sortedResults)
-      writeHealthCheckLog(provider, sortedResults, env)
+      writeHealthCheckLog(provider, sortedResults, diffModels(existingModelIds, passing), env)
       logNote = `Full health check log: ${env.health_check_log_path}\n`
     } else {
       passing = models
