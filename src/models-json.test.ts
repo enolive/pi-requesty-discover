@@ -163,19 +163,19 @@ describe('formatModelsDiffSummary', () => {
   it('reports no changes', () => {
     const summary = formatModelsDiffSummary({ added: [], removed: [] })
 
-    expect(summary).toBe('No added models.\n\nNo removed models.')
+    expect(summary).toBe('No added models.\nNo removed models.')
   })
 
   it('lists added and removed models', () => {
     const summary = formatModelsDiffSummary({ added: ['a', 'b'], removed: ['z'] })
 
-    expect(summary).toBe('Added models:\n- a\n- b\n\nRemoved models:\n- z')
+    expect(summary).toBe('Added models:\n- a\n- b\nRemoved models:\n- z')
   })
 
   it('reports one-sided changes', () => {
     const summary = formatModelsDiffSummary({ added: ['a'], removed: [] })
 
-    expect(summary).toBe('Added models:\n- a\n\nNo removed models.')
+    expect(summary).toBe('Added models:\n- a\nNo removed models.')
   })
 })
 
