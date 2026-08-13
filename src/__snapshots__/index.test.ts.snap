@@ -25,6 +25,7 @@ exports[`command flow > does not update models.json and notifies error on full e
   {
     "message": "Discovered 2 Requesty model(s).
 Health check summary.
+Models diff summary.
 Full health check log: /tmp/pi-requesty-home/.pi/agent/requesty-health-check.log
 models.json was not updated.",
     "type": "error",
@@ -40,6 +41,7 @@ exports[`command flow > emits notification and does not update models.json on dr
   },
   {
     "message": "Discovered 1 Requesty model(s).
+Models diff summary.
 models.json was not updated.",
     "type": "info",
   },
@@ -78,6 +80,7 @@ exports[`command flow > updates models.json and notifies info on no failures 1`]
   {
     "message": "Discovered 2 Requesty model(s).
 Health check summary.
+Models diff summary.
 Full health check log: /tmp/pi-requesty-home/.pi/agent/requesty-health-check.log
 Run /reload to use models.json changes.",
     "type": "info",
@@ -90,6 +93,7 @@ exports[`command flow > updates passing models and notifies warning on partial f
   {
     "message": "Discovered 2 Requesty model(s).
 Health check summary.
+Models diff summary.
 Full health check log: /tmp/pi-requesty-home/.pi/agent/requesty-health-check.log
 Run /reload to use models.json changes.",
     "type": "warning",

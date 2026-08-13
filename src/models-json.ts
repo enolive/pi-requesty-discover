@@ -12,6 +12,7 @@ const ProviderSchema = z
     name: z.string().optional(),
     baseUrl: z.string().optional(),
     apiKey: z.string().optional(),
+    models: z.array(z.object({ id: z.string() }).catchall(z.unknown())).optional(),
   })
   .catchall(z.unknown())
 
@@ -33,6 +34,12 @@ type RequestyProvider = ModelsJsonProvider & {
 type RequestyConfig = {
   data: ModelsJson
   provider: RequestyProvider
+  existingModelIds: string[]
+}
+
+export type ModelsDiff = {
+  added: string[]
+  removed: string[]
 }
 
 export function getRequestyConfig(envConfig: Env = getEnv()): RequestyConfig {
@@ -46,6 +53,7 @@ export function getRequestyConfig(envConfig: Env = getEnv()): RequestyConfig {
   const apiKey = envConfig.requesty_api_key
   return {
     data,
+    existingModelIds: (provider.models ?? []).map(m => m.id),
     provider: {
       ...provider,
       name: nonEmptyString(provider.name) ?? DEFAULT_NAME,
@@ -53,6 +61,24 @@ export function getRequestyConfig(envConfig: Env = getEnv()): RequestyConfig {
       apiKey,
     },
   }
+}
+
+export function diffModels(previousIds: string[], nextModels: ProviderModelConfig[]): ModelsDiff {
+  const previous = new Set(previousIds)
+  const next = new Set(nextModels.map(m => m.id))
+  return {
+    added: [...next].filter(id => !previous.has(id)).toSorted(),
+    removed: [...previous].filter(id => !next.has(id)).toSorted(),
+  }
+}
+
+export function formatModelsDiffSummary(diff: ModelsDiff): string {
+  return [
+    diff.added.length === 0 ? 'No added models.' : 'Added models:',
+    ...diff.added.map(id => `- ${id}`),
+    diff.removed.length === 0 ? 'No removed models.' : 'Removed models:',
+    ...diff.removed.map(id => `- ${id}`),
+  ].join('\n')
 }
 
 export function updateModelsJson(data: ModelsJson, models: ProviderModelConfig[], envConfig: Env = getEnv()): void {

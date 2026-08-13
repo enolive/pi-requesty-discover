@@ -23,6 +23,7 @@ type LoadExtensionOptions = {
   healthResults?: HealthCheckResult[]
   getRequestyConfigError?: unknown
   discoverModelsError?: unknown
+  diff?: ModelsJsonModule.ModelsDiff
 }
 
 const COMMAND_NAME = 'requesty-discover'
@@ -248,6 +249,30 @@ describe('command flow', () => {
     expect(capturedNotifications).toMatchSnapshot()
   })
 
+  it('includes the model diff summary in the notification', async () => {
+    const diff = { added: ['requesty/model-new'], removed: ['requesty/model-old'] }
+    const { runCommand, formatModelsDiffSummary } = await loadExtension({ diff })
+    const { notifier, capturedNotifications } = createFakeNotifier()
+    const { status } = createFakeStatusReporter()
+
+    await runCommand('', status, notifier)
+
+    expect(formatModelsDiffSummary).toHaveBeenCalledWith(diff)
+    expect(capturedNotifications[0].message).toContain('Models diff summary.')
+  })
+
+  it('includes the model diff summary even when health checks are off', async () => {
+    const diff = { added: ['requesty/model-new'], removed: [] }
+    const { runCommand, formatModelsDiffSummary } = await loadExtension({ healthCheckMode: 'off', diff })
+    const { notifier, capturedNotifications } = createFakeNotifier()
+    const { status } = createFakeStatusReporter()
+
+    await runCommand('', status, notifier)
+
+    expect(formatModelsDiffSummary).toHaveBeenCalledWith(diff)
+    expect(capturedNotifications[0].message).toContain('Models diff summary.')
+  })
+
   it('reports progress while checking models', async () => {
     const models = [createModel({ id: 'requesty/model-a' }), createModel({ id: 'requesty/model-b' })]
     const { runCommand } = await loadExtension({ models })
@@ -304,7 +329,7 @@ async function loadExtension(options: LoadExtensionOptions = {}) {
   if (options.getRequestyConfigError) {
     getRequestyConfig.mockThrow(options.getRequestyConfigError)
   } else {
-    getRequestyConfig.mockReturnValue({ data: modelsJson, provider })
+    getRequestyConfig.mockReturnValue({ data: modelsJson, provider, existingModelIds: [] })
   }
   const updateModelsJson = vi.mocked(ModelsJsonModule.updateModelsJson)
   const discoverModels = vi.mocked(RequestyApiModule.discoverModels)
@@ -338,6 +363,10 @@ async function loadExtension(options: LoadExtensionOptions = {}) {
   const formatHealthSummary = vi.mocked(HealthCheckModule.formatHealthSummary)
   formatHealthSummary.mockReturnValue('Health check summary.\n')
   const writeHealthCheckLog = vi.mocked(HealthCheckModule.writeHealthCheckLog)
+  const diffModels = vi.mocked(ModelsJsonModule.diffModels)
+  diffModels.mockReturnValue(options.diff ?? { added: [], removed: [] })
+  const formatModelsDiffSummary = vi.mocked(ModelsJsonModule.formatModelsDiffSummary)
+  formatModelsDiffSummary.mockReturnValue('Models diff summary.')
   const getEnv = vi.mocked(EnvModule.getEnv)
   getEnv.mockReturnValue({
     models_json_path: MODELS_JSON_PATH,
@@ -365,6 +394,7 @@ async function loadExtension(options: LoadExtensionOptions = {}) {
     checkModels,
     formatHealthSummary,
     writeHealthCheckLog,
+    formatModelsDiffSummary,
   }
 }
 

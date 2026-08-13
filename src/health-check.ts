@@ -2,6 +2,7 @@ import type { ProviderModelConfig } from '@earendil-works/pi-coding-agent'
 import fs from 'node:fs'
 import path from 'node:path'
 import { getEnv, type Env } from './env'
+import { formatModelsDiffSummary, type ModelsDiff } from './models-json'
 
 const HEALTH_CHECK_CONCURRENCY = 10
 const HEALTH_CHECK_TIMEOUT_MS = 15_000
@@ -98,7 +99,12 @@ export function formatHealthSummary(results: HealthCheckResult[]): string {
   return `Health check: ${passed.length} OK, ${failed.length} failed:\n${failedModels}\n`
 }
 
-export function writeHealthCheckLog(provider: Provider, results: HealthCheckResult[], envConfig: Env = getEnv()): void {
+export function writeHealthCheckLog(
+  provider: Provider,
+  results: HealthCheckResult[],
+  diff: ModelsDiff,
+  envConfig: Env = getEnv(),
+): void {
   const passed = results.filter(r => r.ok)
   const failed = results.filter(r => !r.ok)
   const lines = [
@@ -109,6 +115,8 @@ export function writeHealthCheckLog(provider: Provider, results: HealthCheckResu
     `Total: ${results.length}`,
     `Passed: ${passed.length}`,
     `Failed: ${failed.length}`,
+    '',
+    formatModelsDiffSummary(diff),
     '',
   ]
 
