@@ -2,7 +2,7 @@ import type { ProviderModelConfig } from '@earendil-works/pi-coding-agent'
 import fs from 'node:fs'
 import path from 'node:path'
 import { getEnv, type Env } from './env'
-import type { ModelsDiff } from './models-json'
+import { formatModelsDiffSummary, type ModelsDiff } from './models-json'
 
 const HEALTH_CHECK_CONCURRENCY = 10
 const HEALTH_CHECK_TIMEOUT_MS = 15_000
@@ -116,7 +116,8 @@ export function writeHealthCheckLog(
     `Passed: ${passed.length}`,
     `Failed: ${failed.length}`,
     '',
-    ...formatModelsDiffSection(diff),
+    formatModelsDiffSummary(diff),
+    '',
   ]
 
   if (failed.length === 0) {
@@ -138,17 +139,6 @@ export function writeHealthCheckLog(
 
   fs.mkdirSync(path.dirname(envConfig.health_check_log_path), { recursive: true })
   fs.writeFileSync(envConfig.health_check_log_path, `${lines.join('\n')}\n`, 'utf8')
-}
-
-function formatModelsDiffSection(diff: ModelsDiff): string[] {
-  return [
-    diff.added.length === 0 ? 'No added models.' : 'Added models:',
-    ...diff.added.map(id => `- ${id}`),
-    '',
-    diff.removed.length === 0 ? 'No removed models.' : 'Removed models:',
-    ...diff.removed.map(id => `- ${id}`),
-    '',
-  ]
 }
 
 export async function postChatCompletion(

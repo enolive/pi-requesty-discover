@@ -1,6 +1,12 @@
 import { ExtensionAPI, ExtensionCommandContext, ProviderModelConfig } from '@earendil-works/pi-coding-agent'
 import { getEnv } from './env'
-import { diffModels, getRequestyConfig, updateModelsJson } from './models-json'
+import {
+  diffModels,
+  formatModelsDiffSummary,
+  getRequestyConfig,
+  updateModelsJson,
+  type ModelsDiff,
+} from './models-json'
 import { discoverModels } from './requesty-api'
 import { checkModels, formatHealthSummary, writeHealthCheckLog } from './health-check'
 import { RequestyStatusLoader } from './ui/requesty-status-loader.ts'
@@ -71,6 +77,7 @@ export async function runCommand(args: string, status: StatusReporter, notifier:
     const models = await discoverModels(provider)
     const modelsMap = new Map(models.map(m => [m.id, m]))
 
+    let diff: ModelsDiff
     let failed = []
     let passing: ProviderModelConfig[]
     let logNote = ''
@@ -89,11 +96,13 @@ export async function runCommand(args: string, status: StatusReporter, notifier:
         const model = modelsMap.get(r.modelId)
         return r.ok && model ? [model] : []
       })
+      diff = diffModels(existingModelIds, passing)
       healthCheckSummary = formatHealthSummary(sortedResults)
-      writeHealthCheckLog(provider, sortedResults, diffModels(existingModelIds, passing), env)
+      writeHealthCheckLog(provider, sortedResults, diff, env)
       logNote = `Full health check log: ${env.health_check_log_path}\n`
     } else {
       passing = models
+      diff = diffModels(existingModelIds, passing)
     }
 
     const shouldUpdate = passing.length > 0 && !dryRun
@@ -102,7 +111,7 @@ export async function runCommand(args: string, status: StatusReporter, notifier:
     }
 
     const writeNote = shouldUpdate ? 'Run /reload to use models.json changes.' : 'models.json was not updated.'
-    const message = `Discovered ${models.length} Requesty model(s).\n${healthCheckSummary}${logNote}${writeNote}`
+    const message = `Discovered ${models.length} Requesty model(s).\n${healthCheckSummary}${formatModelsDiffSummary(diff)}\n${logNote}${writeNote}`
 
     if (failed.length === 0) {
       notifier.notify(message, 'info')

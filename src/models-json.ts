@@ -72,6 +72,15 @@ export function diffModels(previousIds: string[], nextModels: ProviderModelConfi
   }
 }
 
+export function formatModelsDiffSummary(diff: ModelsDiff): string {
+  return [
+    diff.added.length === 0 ? 'No added models.' : 'Added models:',
+    ...diff.added.map(id => `- ${id}`),
+    diff.removed.length === 0 ? 'No removed models.' : 'Removed models:',
+    ...diff.removed.map(id => `- ${id}`),
+  ].join('\n')
+}
+
 export function updateModelsJson(data: ModelsJson, models: ProviderModelConfig[], envConfig: Env = getEnv()): void {
   const provider = data.providers[envConfig.provider_id]
   data.providers[envConfig.provider_id] = {

@@ -3,7 +3,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { Env } from './env'
-import { diffModels, getRequestyConfig, updateModelsJson } from './models-json'
+import { diffModels, formatModelsDiffSummary, getRequestyConfig, updateModelsJson } from './models-json'
 import { createTempDirectory, type TempDirectory } from '../test/helpers/temp-agent'
 
 type TestProvider = Record<string, unknown> & { models?: unknown }
@@ -156,6 +156,26 @@ describe('diffModels', () => {
     const diff = diffModels([], [createModel({ id: 'a' })])
 
     expect(diff).toEqual({ added: ['a'], removed: [] })
+  })
+})
+
+describe('formatModelsDiffSummary', () => {
+  it('reports no changes', () => {
+    const summary = formatModelsDiffSummary({ added: [], removed: [] })
+
+    expect(summary).toBe('No added models.\n\nNo removed models.')
+  })
+
+  it('lists added and removed models', () => {
+    const summary = formatModelsDiffSummary({ added: ['a', 'b'], removed: ['z'] })
+
+    expect(summary).toBe('Added models:\n- a\n- b\n\nRemoved models:\n- z')
+  })
+
+  it('reports one-sided changes', () => {
+    const summary = formatModelsDiffSummary({ added: ['a'], removed: [] })
+
+    expect(summary).toBe('Added models:\n- a\n\nNo removed models.')
   })
 })
 
