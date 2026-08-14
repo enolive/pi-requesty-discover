@@ -16,7 +16,8 @@ This is a fork of https://github.com/requestyai/pi-requesty[pi-requesty] with ad
 
 * Use `REQUESTY_API_KEY` from the environment
 * Health-check available models and write a log about them
-* Provide a dry-run mode that does not change anything
+* Brief information about what was found, including added/removed models, health summary
+* Confirm before writing `models.json`, with a dry-run mode that only previews
 
 == When and why use it
 
@@ -25,7 +26,7 @@ Use this extension if
 - you are on Requesty.ai
 - you are limited to certain models by a company policy (for instance, for data residency/protection reasons)
 - you don't want to handcraft your own curated list of models constantly
-- you want to health check the list to complain about non-working models via a dry-run
+- you want to health-check models and preview the diff before writing
 
 == Installation
 
@@ -124,12 +125,20 @@ Inside Pi:
 /requesty-discover
 ----
 
-The command fetches Requesty models using `~/.pi/agent/models.json` and writes the discovered model IDs back to the same file.
-Run `/reload` after syncing.
+The command:
+
+- discovers Requesty models (and optional health checks)
+- shows a summary notification (added/removed IDs, health summary)
+- asks for confirmation before writing `~/.pi/agent/models.json`
+- reports whether the file was updated
+
+If there are no model ID changes, confirmation still offers a metadata refresh write, which might have changed as well.
+
+After a successful write, run `/reload`.
 
 [source,text]
 ----
 /requesty-discover --dry-run
 ----
 
-This will not overwrite the `models.json` file, but will do everything else, including the health checks.
+Same discovery and health checks, but never prompts to write and leaves `models.json` unchanged.

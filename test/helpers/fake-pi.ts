@@ -29,12 +29,16 @@ export function createFakePi() {
 }
 
 type FakeCommandContextOptions = {
-  mode?: 'tui' | 'rpc' | 'json' | 'print'
+  mode?: ExtensionCommandContext['mode']
+  /** Value returned by ctx.ui.confirm. Defaults to true so existing write paths keep working. */
+  confirmResult?: boolean
 }
 
 export function createFakeCommandContext(options: FakeCommandContextOptions = {}) {
-  const notifications: Array<{ message: string; type?: NotificationType }> = []
-  const loaderStatusSink: string[] = []
+  const capturedNotifications: Array<{ message: string; type?: NotificationType }> = []
+  const capturedStatuses: string[] = []
+  const capturedConfirmations: Array<{ title: string; message: string }> = []
+  const confirmResult = options.confirmResult ?? true
 
   const fakeTheme = {
     fg: (_color: string, text: string) => text,
@@ -60,21 +64,28 @@ export function createFakeCommandContext(options: FakeCommandContextOptions = {}
 
       const originalSetMessage = loader.setMessage.bind(loader)
       loader.setMessage = (message: string) => {
-        loaderStatusSink.push(message)
+        capturedStatuses.push(message)
         originalSetMessage(message)
       }
     })
   }
 
+  const capturedUiOrder: ('notify' | 'confirm')[] = []
   const ctx = {
-    mode: options.mode ?? 'print',
+    mode: options.mode ?? 'tui',
     ui: {
       notify(message: string, type?: NotificationType) {
-        notifications.push({ message, type })
+        capturedNotifications.push({ message, type })
+        capturedUiOrder.push('notify')
+      },
+      confirm(title: string, message: string) {
+        capturedConfirmations.push({ title, message })
+        capturedUiOrder.push('confirm')
+        return Promise.resolve(confirmResult)
       },
       custom,
     },
   } as unknown as ExtensionCommandContext
 
-  return { ctx, notifications, loaderStatusSink }
+  return { ctx, capturedNotifications, capturedStatuses, capturedConfirmations, capturedUiOrder }
 }
