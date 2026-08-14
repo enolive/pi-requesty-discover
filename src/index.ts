@@ -1,11 +1,11 @@
 import { ExtensionAPI, ExtensionCommandContext, ProviderModelConfig } from '@earendil-works/pi-coding-agent'
-import { getEnv } from './env'
+import { type Env, getEnv } from './env'
 import {
   diffModels,
   formatModelsDiffSummary,
   getRequestyConfig,
-  updateModelsJson,
   type ModelsDiff,
+  updateModelsJson,
 } from './models-json'
 import { discoverModels } from './requesty-api'
 import { checkModels, formatHealthSummary, writeHealthCheckLog } from './health-check'
@@ -26,10 +26,34 @@ export type Notifier = {
   notify(message: string, level: NotificationLevel): void
 }
 
+export type Confirmer = {
+  confirm(title: string, message: string): Promise<boolean>
+}
+
 export type StatusReporter = {
   set(message: string): void
-  clear(): void
 }
+
+type ModelsJsonData = ReturnType<typeof getRequestyConfig>['data']
+
+type DiscoveryEvaluation = {
+  dryRun: boolean
+  modelCount: number
+  failedCount: number
+  passing: ProviderModelConfig[]
+  diff: ModelsDiff
+  healthCheckSummary: string
+  logNote: string
+  data: ModelsJsonData
+  env: Env
+}
+
+type EvaluationResult =
+  | {
+      ok: true
+      value: DiscoveryEvaluation
+    }
+  | { ok: false; error: unknown }
 
 // noinspection JSUnusedGlobalSymbols
 export default function (pi: ExtensionAPI) {
@@ -37,94 +61,179 @@ export default function (pi: ExtensionAPI) {
     description: 'Dynamically discover Requesty models, run health checks, and update the local models.json.',
     getArgumentCompletions,
     handler: async (args, ctx) => {
-      await runWithStatusUi(ctx, 'Discovering models...', (status, notifier) => runCommand(args, status, notifier))
+      await runDiscoveryWorkflow(ctx, args)
     },
   })
+}
+
+export async function runDiscoveryWorkflow(ctx: ExtensionCommandContext, args: string) {
+  // Interactive TUI command; no print/json/rpc path.
+  if (ctx.mode !== 'tui') {
+    return
+  }
+
+  const notifier = createUiNotifier(ctx)
+  const confirmer = createUiConfirmer(ctx)
+
+  // Phase A: progress UI only. Loader must close before confirm (Phase B).
+  // Errors are wrapped because ctx.ui.custom resolves via done() and does not reject.
+  const evaluationResult: EvaluationResult = await runWithStatusUi(ctx, 'Discovering models...', async status => {
+    try {
+      const evaluation = await evaluateDiscovery(args, status)
+      return { ok: true, value: evaluation }
+    } catch (error) {
+      return { ok: false, error }
+    }
+  })
+
+  if (!evaluationResult.ok) {
+    notifier.notify(formatDiscoveryFailure(evaluationResult.error), 'error')
+    return
+  }
+
+  // Phases B + C: decide, optional write, final notify — outside the loader.
+  await finalizeDiscovery(evaluationResult.value, confirmer, notifier)
 }
 
 async function runWithStatusUi<T>(
   ctx: ExtensionCommandContext,
   initialMessage: string,
-  fn: (status: StatusReporter, notifier: Notifier) => Promise<T>,
+  fn: (status: StatusReporter) => Promise<T>,
 ): Promise<T> {
-  if (ctx.mode !== 'tui') {
-    return fn(createNoopStatusReporter(), createNoopNotifier())
-  }
-
   return ctx.ui.custom<T>((_tui, theme, _kb, done) => {
     const loader = new RequestyStatusLoader(_tui, theme, initialMessage)
-    const notifier = createUiNotifier(ctx)
     const status = createLoaderStatusReporter(loader)
     void Promise.resolve()
-      .then(() => fn(status, notifier))
+      .then(() => fn(status))
       .then(done)
       .catch(done)
     return loader
   })
 }
 
-export async function runCommand(args: string, status: StatusReporter, notifier: Notifier): Promise<void> {
+function formatDiscoveryFailure(error: unknown): string {
+  const detail = error instanceof Error ? error.message : String(error)
+  return `Discovery failed: ${detail}`
+}
+
+async function evaluateDiscovery(args: string, status: StatusReporter): Promise<DiscoveryEvaluation> {
   status.set('Discovering Requesty models...')
-  const parts = args.split(' ')
-  const dryRun = parts.includes(DRY_RUN_ARG)
-  if (dryRun) {
-    notifier.notify('running in dry mode, no changes will be done', 'info')
+  const dryRun = args.split(' ').includes(DRY_RUN_ARG)
+
+  const env = getEnv()
+  const { data, provider, existingModelIds } = getRequestyConfig(env)
+  const models = await discoverModels(provider)
+  const modelsMap = new Map(models.map(m => [m.id, m]))
+
+  let diff: ModelsDiff
+  let failedCount = 0
+  let passing: ProviderModelConfig[]
+  let logNote = ''
+  let healthCheckSummary = ''
+
+  if (env.health_check_mode !== 'off') {
+    status.set(`Checking models 0/${models.length}...`)
+    const healthResults = await checkModels(provider, models, env.health_check_mode === 'full', {
+      onProgress: ({ completed, total }) => {
+        status.set(`Checking models ${completed}/${total}...`)
+      },
+    })
+    const sortedResults = healthResults.toSorted((a, b) => a.modelId.localeCompare(b.modelId))
+    failedCount = sortedResults.filter(r => !r.ok).length
+    passing = sortedResults.flatMap(r => {
+      const model = modelsMap.get(r.modelId)
+      return r.ok && model ? [model] : []
+    })
+    diff = diffModels(existingModelIds, passing)
+    healthCheckSummary = formatHealthSummary(sortedResults)
+    writeHealthCheckLog(provider, sortedResults, diff, env)
+    logNote = `Full health check log: ${env.health_check_log_path}\n`
+  } else {
+    passing = models
+    diff = diffModels(existingModelIds, passing)
   }
 
-  try {
-    const env = getEnv()
-    const { data, provider, existingModelIds } = getRequestyConfig(env)
-    const models = await discoverModels(provider)
-    const modelsMap = new Map(models.map(m => [m.id, m]))
-
-    let diff: ModelsDiff
-    let failed = []
-    let passing: ProviderModelConfig[]
-    let logNote = ''
-    let healthCheckSummary = ''
-
-    if (env.health_check_mode !== 'off') {
-      status.set(`Checking models 0/${models.length}...`)
-      const healthResults = await checkModels(provider, models, env.health_check_mode === 'full', {
-        onProgress: ({ completed, total }) => {
-          status.set(`Checking models ${completed}/${total}...`)
-        },
-      })
-      const sortedResults = healthResults.toSorted((a, b) => a.modelId.localeCompare(b.modelId))
-      failed = sortedResults.filter(r => !r.ok)
-      passing = sortedResults.flatMap(r => {
-        const model = modelsMap.get(r.modelId)
-        return r.ok && model ? [model] : []
-      })
-      diff = diffModels(existingModelIds, passing)
-      healthCheckSummary = formatHealthSummary(sortedResults)
-      writeHealthCheckLog(provider, sortedResults, diff, env)
-      logNote = `Full health check log: ${env.health_check_log_path}\n`
-    } else {
-      passing = models
-      diff = diffModels(existingModelIds, passing)
-    }
-
-    const shouldUpdate = passing.length > 0 && !dryRun
-    if (shouldUpdate) {
-      updateModelsJson(data, passing, env)
-    }
-
-    const writeNote = shouldUpdate ? 'Run /reload to use models.json changes.' : 'models.json was not updated.'
-    const message = `Discovered ${models.length} Requesty model(s).\n${healthCheckSummary}${formatModelsDiffSummary(diff)}\n${logNote}${writeNote}`
-
-    if (failed.length === 0) {
-      notifier.notify(message, 'info')
-    } else if (failed.length < models.length) {
-      notifier.notify(message, 'warning')
-    } else {
-      notifier.notify(message, 'error')
-    }
-  } catch (error) {
-    notifier.notify(`Discovery failed: ${error instanceof Error ? error.message : String(error)}`, 'error')
-  } finally {
-    status.clear()
+  return {
+    dryRun,
+    modelCount: models.length,
+    failedCount,
+    passing,
+    diff,
+    healthCheckSummary,
+    logNote,
+    data,
+    env,
   }
+}
+
+async function finalizeDiscovery(
+  evaluation: DiscoveryEvaluation,
+  confirmer: Confirmer,
+  notifier: Notifier,
+): Promise<void> {
+  const level = notificationLevel(evaluation)
+  const summary = buildDiscoverySummary(evaluation)
+
+  // Always surface the discovery result first (toast styling), then decide.
+  if (evaluation.dryRun) {
+    notifier.notify(
+      `${summary}
+Dry run: left models.json unchanged.`,
+      level,
+    )
+    return
+  }
+
+  if (evaluation.passing.length === 0) {
+    notifier.notify(
+      `${summary}
+Left models.json unchanged.`,
+      level,
+    )
+    return
+  }
+
+  notifier.notify(summary, level)
+  const { title, message } = buildConfirmPrompt(evaluation)
+  const shouldUpdate = await confirmer.confirm(title, message)
+  if (shouldUpdate) {
+    updateModelsJson(evaluation.data, evaluation.passing, evaluation.env)
+    notifier.notify('Updated models.json. Run /reload to use the changes.', 'info')
+    return
+  }
+
+  notifier.notify('Left models.json unchanged.', 'info')
+}
+
+function buildDiscoverySummary(evaluation: DiscoveryEvaluation): string {
+  return [
+    `Discovered ${evaluation.modelCount} Requesty model(s).`,
+    evaluation.healthCheckSummary.trimEnd(),
+    formatModelsDiffSummary(evaluation.diff),
+    evaluation.logNote.trimEnd(),
+  ]
+    .filter(part => part.length > 0)
+    .join('\n')
+}
+
+function buildConfirmPrompt(evaluation: DiscoveryEvaluation): { title: string; message: string } {
+  const hasIdChanges = evaluation.diff.added.length > 0 || evaluation.diff.removed.length > 0
+  if (hasIdChanges) {
+    return {
+      title: `Write ${evaluation.passing.length} model(s)?`,
+      message: 'Update models.json with the discovery result above.',
+    }
+  }
+  return {
+    title: 'Refresh models.json?',
+    message: 'No model ID changes. Rewrite the file to refresh metadata anyway?',
+  }
+}
+
+function notificationLevel(evaluation: DiscoveryEvaluation): NotificationLevel {
+  if (evaluation.failedCount === 0) return 'info'
+  if (evaluation.failedCount < evaluation.modelCount) return 'warning'
+  return 'error'
 }
 
 function getArgumentCompletions(prefix: string): AutocompleteItem[] {
@@ -132,30 +241,11 @@ function getArgumentCompletions(prefix: string): AutocompleteItem[] {
     {
       value: DRY_RUN_ARG,
       label: DRY_RUN_ARG,
-      description: 'Preview without writing into the new model.json file',
+      description: 'Preview discovery without offering to write models.json',
     },
   ]
   if (!prefix) return options
   return options.filter(o => o.value.toLowerCase().startsWith(prefix.toLowerCase()))
-}
-
-function createNoopStatusReporter(): StatusReporter {
-  return {
-    set() {
-      // Status output is only rendered in TUI mode.
-    },
-    clear() {
-      // Status output is only rendered in TUI mode.
-    },
-  }
-}
-
-function createNoopNotifier(): Notifier {
-  return {
-    notify() {
-      // Notifications are only rendered in TUI mode.
-    },
-  }
 }
 
 function createUiNotifier(ctx: ExtensionCommandContext): Notifier {
@@ -167,13 +257,18 @@ function createUiNotifier(ctx: ExtensionCommandContext): Notifier {
   }
 }
 
+function createUiConfirmer(ctx: ExtensionCommandContext): Confirmer {
+  return {
+    confirm(title, message) {
+      return ctx.ui.confirm(title, message)
+    },
+  }
+}
+
 function createLoaderStatusReporter(loader: RequestyStatusLoader): StatusReporter {
   return {
     set(message: string) {
       loader.setMessage(message)
-    },
-    clear() {
-      // Nothing to clear: the loader closes when ctx.ui.custom() resolves.
     },
   }
 }

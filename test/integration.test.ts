@@ -76,7 +76,7 @@ describe('requesty-models-discover integration', () => {
     extension.default(pi)
     const command = commands.get(COMMAND_NAME)
     expect(command).toBeDefined()
-    const { ctx, notifications } = createFakeCommandContext({ mode: 'tui' })
+    const { ctx, capturedNotifications } = createFakeCommandContext()
 
     await command!.handler('', ctx)
 
@@ -92,10 +92,13 @@ describe('requesty-models-discover integration', () => {
     const healthCheckLog = await fs.readFile(tempDirectory.healthCheckLogPath, 'utf8')
     expect(healthCheckLog).toContain('Total: 2')
     expect(healthCheckLog).toContain('Passed: 2')
-    expect(notifications).toHaveLength(1)
-    expect(notifications[0].type).toBe('info')
-    expect(notifications[0].message).toContain(`${COMMAND_NAME}: Discovered 2 Requesty model(s).`)
-    expect(notifications[0].message).toContain('Run /reload to use models.json changes.')
+    expect(capturedNotifications).toHaveLength(2)
+    expect(capturedNotifications[0]?.type).toBe('info')
+    expect(capturedNotifications[0]?.message).toContain(`${COMMAND_NAME}: Discovered 2 Requesty model(s).`)
+    expect(capturedNotifications[1]).toEqual({
+      type: 'info',
+      message: `${COMMAND_NAME}: Updated models.json. Run /reload to use the changes.`,
+    })
   })
 })
 
