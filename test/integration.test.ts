@@ -3,6 +3,7 @@ import { http, HttpResponse } from 'msw'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createFakeCommandContext, createFakePi } from './helpers/fake-pi'
 import { createTempDirectory, type TempDirectory } from './helpers/temp-agent'
+import { DEFAULT_PROVIDER_ID } from '../src/env'
 import { server } from './setup'
 
 const COMMAND_NAME = 'requesty-discover'
@@ -16,7 +17,7 @@ beforeEach(async () => {
     getEnv: () => ({
       models_json_path: tempDirectory?.modelsJsonPath,
       health_check_log_path: tempDirectory?.healthCheckLogPath,
-      provider_id: 'requesty-export',
+      provider_id: DEFAULT_PROVIDER_ID,
       requesty_api_key: 'test-api-key-from-env',
       health_check_mode: 'full',
     }),
@@ -108,7 +109,7 @@ async function writeInitialModelsJson(modelsJsonPath: string): Promise<void> {
     `${JSON.stringify(
       {
         providers: {
-          'requesty-export': {
+          [DEFAULT_PROVIDER_ID]: {
             name: 'Requesty',
             baseUrl: BASE_URL,
             apiKey: 'api-key-from-models-json-will-be-ignored',

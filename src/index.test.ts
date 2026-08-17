@@ -12,10 +12,13 @@ import { shuffleCompareFn } from '../test/helpers/shuffle.ts'
 vi.mock('./health-check')
 vi.mock('./models-json')
 vi.mock('./requesty-api')
-vi.mock('./env')
+vi.mock('./env', async importOriginal => {
+  const actual = await importOriginal<typeof import('./env')>()
+  return { ...actual, getEnv: vi.fn() }
+})
 
 const COMMAND_NAME = 'requesty-discover'
-const REQUESTY_PROVIDER_ID = 'requesty-export'
+const REQUESTY_PROVIDER_ID = EnvModule.DEFAULT_PROVIDER_ID
 
 type TestCommand = Omit<RegisteredCommand, 'name' | 'sourceInfo'>
 type HealthCheckMode = 'off' | 'basic' | 'full'
@@ -42,7 +45,7 @@ const provider = {
 
 const modelsJson = {
   providers: {
-    'requesty-export': {
+    [REQUESTY_PROVIDER_ID]: {
       name: 'Requesty',
       baseUrl: 'https://router.requesty.ai/v1',
       apiKey: 'test-key',

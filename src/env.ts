@@ -5,6 +5,8 @@ import { getAgentDir } from '@earendil-works/pi-coding-agent'
 
 const HealthCheckModeSchema = z.enum(['off', 'basic', 'full']).default('full')
 
+export const DEFAULT_PROVIDER_ID = 'requesty-export'
+
 export type Env = {
   models_json_path: string
   health_check_log_path: string
@@ -28,7 +30,7 @@ export function getEnv(): Env {
   return {
     models_json_path: path.join(agentPath, 'models.json'),
     health_check_log_path: path.join(agentPath, 'requesty-health-check.log'),
-    provider_id: envVars.REQUESTY_PROVIDER_ID ?? 'requesty-export',
+    provider_id: envVars.REQUESTY_PROVIDER_ID ?? DEFAULT_PROVIDER_ID,
     requesty_api_key: apiKey,
     health_check_mode: result.data,
   }

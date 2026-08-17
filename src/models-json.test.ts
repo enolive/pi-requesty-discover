@@ -3,8 +3,11 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { Env } from './env'
+import { DEFAULT_PROVIDER_ID } from './env'
 import { diffModels, formatModelsDiffSummary, getRequestyConfig, updateModelsJson } from './models-json'
 import { createTempDirectory, type TempDirectory } from '../test/helpers/temp-agent'
+
+const PROVIDER_ID = DEFAULT_PROVIDER_ID
 
 type TestProvider = Record<string, unknown> & { models?: unknown }
 type TestModelsJson = { providers: Record<string, TestProvider> }
@@ -46,7 +49,7 @@ describe('getRequestyConfig', () => {
 
   it('ignores apiKey from models.json no matter what it is as it is unreliable due to env substitution and other things', async () => {
     const envConfig = await createEnvWithModelsJson(tempDirectory, {
-      providers: { 'requesty-export': { apiKey: `these-are-not-the-druids-you-are-looking-for` } },
+      providers: { [PROVIDER_ID]: { apiKey: `these-are-not-the-druids-you-are-looking-for` } },
     })
 
     const config = getRequestyConfig(envConfig)
@@ -61,12 +64,12 @@ describe('getRequestyConfig', () => {
 
     const readConfig = () => getRequestyConfig(envConfig)
 
-    expect(readConfig).toThrow(`${envConfig.models_json_path} does not define providers.requesty-export`)
+    expect(readConfig).toThrow(`${envConfig.models_json_path} does not define providers.${PROVIDER_ID}`)
   })
 
   it('env API key override wins over models.json', async () => {
     const envConfig = await createEnvWithModelsJson(tempDirectory, {
-      providers: { 'requesty-export': { apiKey: 'models-json-key' } },
+      providers: { [PROVIDER_ID]: { apiKey: 'models-json-key' } },
     })
     envConfig.requesty_api_key = 'env-key'
 
@@ -77,7 +80,7 @@ describe('getRequestyConfig', () => {
 
   it('defaults name to Requesty', async () => {
     const envConfig = await createEnvWithModelsJson(tempDirectory, {
-      providers: { 'requesty-export': { apiKey: 'models-json-key' } },
+      providers: { [PROVIDER_ID]: { apiKey: 'models-json-key' } },
     })
 
     const config = getRequestyConfig(envConfig)
@@ -87,7 +90,7 @@ describe('getRequestyConfig', () => {
 
   it('defaults base URL to https://router.requesty.ai/v1', async () => {
     const envConfig = await createEnvWithModelsJson(tempDirectory, {
-      providers: { 'requesty-export': { apiKey: 'models-json-key' } },
+      providers: { [PROVIDER_ID]: { apiKey: 'models-json-key' } },
     })
 
     const config = getRequestyConfig(envConfig)
@@ -98,7 +101,7 @@ describe('getRequestyConfig', () => {
   it('removes trailing slash from base URL', async () => {
     const envConfig = await createEnvWithModelsJson(tempDirectory, {
       providers: {
-        'requesty-export': {
+        [PROVIDER_ID]: {
           baseUrl: 'https://router.requesty.ai/v1///',
           apiKey: 'models-json-key',
         },
@@ -113,7 +116,7 @@ describe('getRequestyConfig', () => {
   it('exposes existing model IDs of the selected provider', async () => {
     const envConfig = await createEnvWithModelsJson(tempDirectory, {
       providers: {
-        'requesty-export': {
+        [PROVIDER_ID]: {
           apiKey: 'models-json-key',
           models: [{ id: 'requesty/model-a' }, { id: 'requesty/model-b', name: 'Model B' }],
         },
@@ -127,7 +130,7 @@ describe('getRequestyConfig', () => {
 
   it('exposes empty existing model IDs when provider has no models', async () => {
     const envConfig = await createEnvWithModelsJson(tempDirectory, {
-      providers: { 'requesty-export': { apiKey: 'models-json-key' } },
+      providers: { [PROVIDER_ID]: { apiKey: 'models-json-key' } },
     })
 
     const config = getRequestyConfig(envConfig)
@@ -192,7 +195,7 @@ describe('updateModelsJson', () => {
 
   it('writes models into selected provider', async () => {
     const envConfig = await createEnvWithModelsJson(tempDirectory, {
-      providers: { 'requesty-export': { apiKey: 'models-json-key', models: [] } },
+      providers: { [PROVIDER_ID]: { apiKey: 'models-json-key', models: [] } },
     })
     const data = getRequestyConfig(envConfig).data
     const models = [createModel({ id: 'requesty/model-a', name: 'Model A' })]
@@ -205,14 +208,14 @@ describe('updateModelsJson', () => {
 
   it('writes REQUESTY_API_KEY reference when selected provider has no apiKey', async () => {
     const envConfig = await createEnvWithModelsJson(tempDirectory, {
-      providers: { 'requesty-export': { models: [] } },
+      providers: { [PROVIDER_ID]: { models: [] } },
     })
     const data = getRequestyConfig(envConfig).data
 
     updateModelsJson(data, [createModel()], envConfig)
 
     const written = await readModelsJsonFile(envConfig)
-    expect(written.providers['requesty-export']?.apiKey).toBe('$REQUESTY_API_KEY')
+    expect(written.providers[PROVIDER_ID]?.apiKey).toBe('$REQUESTY_API_KEY')
   })
 
   it('preserves selected provider fields', async () => {
@@ -225,7 +228,7 @@ describe('updateModelsJson', () => {
     }
 
     const envConfig = await createEnvWithModelsJson(tempDirectory, {
-      providers: { 'requesty-export': originalRequestyProvider },
+      providers: { [PROVIDER_ID]: originalRequestyProvider },
     })
     const data = getRequestyConfig(envConfig).data
     const models = [createModel(), createModel(), createModel()]
@@ -233,7 +236,7 @@ describe('updateModelsJson', () => {
     updateModelsJson(data, models, envConfig)
 
     const written = await readModelsJsonFile(envConfig)
-    expect(written.providers['requesty-export']).toEqual(expect.objectContaining(originalRequestyProvider))
+    expect(written.providers[PROVIDER_ID]).toEqual(expect.objectContaining(originalRequestyProvider))
   })
 
   it('preserves other providers', async () => {
@@ -244,7 +247,7 @@ describe('updateModelsJson', () => {
     }
     const envConfig = await createEnvWithModelsJson(tempDirectory, {
       providers: {
-        'requesty-export': { apiKey: 'models-json-key', models: [] },
+        [PROVIDER_ID]: { apiKey: 'models-json-key', models: [] },
         anthropic: originalAnthropicProvider,
       },
     })
@@ -264,7 +267,7 @@ describe('updateModelsJson', () => {
       models_json_path: modelsJsonPath,
     }
     const data = {
-      providers: { 'requesty-export': { apiKey: 'models-json-key', models: [] } },
+      providers: { [PROVIDER_ID]: { apiKey: 'models-json-key', models: [] } },
     }
     const models = [createModel()]
 
@@ -279,7 +282,7 @@ function createTestEnv(tempDirectory: TempDirectory): Env {
   return {
     models_json_path: tempDirectory.modelsJsonPath,
     health_check_log_path: tempDirectory.healthCheckLogPath,
-    provider_id: 'requesty-export',
+    provider_id: DEFAULT_PROVIDER_ID,
     requesty_api_key: 'test-api-key',
     health_check_mode: 'full',
   }

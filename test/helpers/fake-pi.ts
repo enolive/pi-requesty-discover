@@ -1,5 +1,6 @@
 import type { ExtensionAPI, ExtensionCommandContext, RegisteredCommand } from '@earendil-works/pi-coding-agent'
 import type { RequestyStatusLoader } from '../../src/ui/requesty-status-loader.ts'
+import { DEFAULT_PROVIDER_ID } from '../../src/env'
 
 type RegisteredCommandOptions = Omit<RegisteredCommand, 'name' | 'sourceInfo'>
 type UiCustom = ExtensionCommandContext['ui']['custom']
@@ -40,7 +41,7 @@ type FakeCommandContextOptions = {
   mode?: ExtensionCommandContext['mode']
   /** Value returned by ctx.ui.confirm. Defaults to true so existing write paths keep working. */
   confirmResult?: boolean
-  /** Provider id of the currently selected model (ctx.model.provider). Defaults to 'requesty-export'. */
+  /** Provider id of the currently selected model (ctx.model.provider). Defaults to the configured Requesty provider id. */
   modelProvider?: string
   /** Whether a UI/footer is available (ctx.hasUI). Defaults to true; set false for print/json mode. */
   hasUI?: boolean
@@ -84,7 +85,7 @@ export function createFakeCommandContext(options: FakeCommandContextOptions = {}
   }
 
   const capturedUiOrder: ('notify' | 'confirm')[] = []
-  const modelProvider = options.modelProvider ?? 'requesty-export'
+  const modelProvider = options.modelProvider ?? DEFAULT_PROVIDER_ID
   const ctx = {
     mode: options.mode ?? 'tui',
     hasUI: options.hasUI ?? true,
