@@ -1,4 +1,9 @@
-import { ExtensionAPI, ExtensionCommandContext, ProviderModelConfig } from '@earendil-works/pi-coding-agent'
+import {
+  ExtensionAPI,
+  ExtensionCommandContext,
+  ExtensionContext,
+  ProviderModelConfig,
+} from '@earendil-works/pi-coding-agent'
 import { type Env, getEnv } from './env'
 import {
   diffModels,
@@ -7,12 +12,13 @@ import {
   type ModelsDiff,
   updateModelsJson,
 } from './models-json'
-import { discoverModels } from './requesty-api'
+import { type ApiKeyInfo, discoverModels, fetchApiKeyInfo } from './requesty-api'
 import { checkModels, formatHealthSummary, writeHealthCheckLog } from './health-check'
 import { RequestyStatusLoader } from './ui/requesty-status-loader.ts'
 
 const COMMAND_NAME = 'requesty-discover'
 const DRY_RUN_ARG = '--dry-run'
+export const USAGE_STATUS_KEY = 'requesty-usage'
 
 interface AutocompleteItem {
   value: string
@@ -63,6 +69,10 @@ export default function (pi: ExtensionAPI) {
     handler: async (args, ctx) => {
       await runDiscoveryWorkflow(ctx, args)
     },
+  })
+
+  pi.on('turn_end', async (_event, ctx) => {
+    await updateUsageStatus(ctx)
   })
 }
 
@@ -271,4 +281,30 @@ function createLoaderStatusReporter(loader: RequestyStatusLoader): StatusReporte
       loader.setMessage(message)
     },
   }
+}
+
+async function updateUsageStatus(ctx: ExtensionContext): Promise<void> {
+  try {
+    const info = await fetchUsageStatus()
+    ctx.ui.setStatus(USAGE_STATUS_KEY, formatUsageStatus(info))
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error)
+    ctx.ui.notify(`${USAGE_STATUS_KEY}: Usage check failed: ${detail}`, 'error')
+  }
+}
+
+export function formatUsageStatus(info: ApiKeyInfo): string {
+  const spend = `$${info.monthlySpend.toFixed(2)}`
+  if (info.monthlyLimit <= 0) {
+    return `Requesty "${info.name}": ${spend} (unlimited)`
+  }
+  const limit = `$${info.monthlyLimit.toFixed(2)}`
+  const percent = Math.floor((info.monthlySpend / info.monthlyLimit) * 100)
+  return `Requesty "${info.name}": ${spend}/${limit} (${percent}%)`
+}
+
+async function fetchUsageStatus() {
+  const env = getEnv()
+  const { provider } = getRequestyConfig(env)
+  return await fetchApiKeyInfo(provider)
 }

@@ -16,16 +16,24 @@ type FakeUiCustomFactory<T> = (
   done: (result: T) => void,
 ) => UiCustomComponent | Promise<UiCustomComponent>
 
+export type CapturedEventHandler = (...args: unknown[]) => unknown
+
 export function createFakePi() {
   const commands = new Map<string, RegisteredCommandOptions>()
+  const eventHandlers = new Map<string, CapturedEventHandler>()
+
+  const on: ExtensionAPI['on'] = (event, handler) => {
+    eventHandlers.set(event, handler as CapturedEventHandler)
+  }
 
   const pi = {
     registerCommand(name: string, command: RegisteredCommandOptions) {
       commands.set(name, command)
     },
+    on,
   } as unknown as ExtensionAPI
 
-  return { pi, commands }
+  return { pi, commands, eventHandlers }
 }
 
 type FakeCommandContextOptions = {
@@ -37,6 +45,7 @@ type FakeCommandContextOptions = {
 export function createFakeCommandContext(options: FakeCommandContextOptions = {}) {
   const capturedNotifications: Array<{ message: string; type?: NotificationType }> = []
   const capturedStatuses: string[] = []
+  const capturedStatusLines: Array<{ key: string; text: string | undefined }> = []
   const capturedConfirmations: Array<{ title: string; message: string }> = []
   const confirmResult = options.confirmResult ?? true
 
@@ -84,8 +93,11 @@ export function createFakeCommandContext(options: FakeCommandContextOptions = {}
         return Promise.resolve(confirmResult)
       },
       custom,
+      setStatus(key: string, text: string | undefined) {
+        capturedStatusLines.push({ key, text })
+      },
     },
   } as unknown as ExtensionCommandContext
 
-  return { ctx, capturedNotifications, capturedStatuses, capturedConfirmations, capturedUiOrder }
+  return { ctx, capturedNotifications, capturedStatuses, capturedStatusLines, capturedConfirmations, capturedUiOrder }
 }
