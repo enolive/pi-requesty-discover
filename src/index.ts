@@ -295,6 +295,7 @@ function createLoaderStatusReporter(loader: RequestyStatusLoader): StatusReporte
 }
 
 export async function updateUsageStatus(ctx: ExtensionContext): Promise<void> {
+  if (!ctx.hasUI) return // no footer to write to (print/json mode): skip the wasted fetch
   const token: object = {}
   latestToken = token
   const providerId = getRequestyProviderId()

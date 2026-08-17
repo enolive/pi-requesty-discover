@@ -688,6 +688,18 @@ describe('usage status', () => {
 
       expect(capturedStatusLines).toEqual([])
     })
+
+    it('skips the fetch and writes nothing when there is no UI (print/json mode)', async () => {
+      configureMockedDependencies()
+      const { eventHandlers } = await loadExtension()
+      const { ctx, capturedStatusLines } = createFakeCommandContext({ hasUI: false })
+      const fetchApiKeyInfo = vi.mocked(RequestyApiModule.fetchApiUsage)
+
+      await fireEvent(eventHandlers, 'turn_end', ctx)
+
+      expect(capturedStatusLines).toEqual([])
+      expect(fetchApiKeyInfo).not.toHaveBeenCalled()
+    })
   })
 })
 

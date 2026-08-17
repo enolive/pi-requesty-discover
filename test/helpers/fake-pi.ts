@@ -42,6 +42,8 @@ type FakeCommandContextOptions = {
   confirmResult?: boolean
   /** Provider id of the currently selected model (ctx.model.provider). Defaults to 'requesty-export'. */
   modelProvider?: string
+  /** Whether a UI/footer is available (ctx.hasUI). Defaults to true; set false for print/json mode. */
+  hasUI?: boolean
 }
 
 export function createFakeCommandContext(options: FakeCommandContextOptions = {}) {
@@ -85,6 +87,7 @@ export function createFakeCommandContext(options: FakeCommandContextOptions = {}
   const modelProvider = options.modelProvider ?? 'requesty-export'
   const ctx = {
     mode: options.mode ?? 'tui',
+    hasUI: options.hasUI ?? true,
     model: { provider: modelProvider },
     ui: {
       notify(message: string, type?: NotificationType) {
