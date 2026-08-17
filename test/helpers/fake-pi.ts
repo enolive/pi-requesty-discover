@@ -40,6 +40,8 @@ type FakeCommandContextOptions = {
   mode?: ExtensionCommandContext['mode']
   /** Value returned by ctx.ui.confirm. Defaults to true so existing write paths keep working. */
   confirmResult?: boolean
+  /** Provider id of the currently selected model (ctx.model.provider). Defaults to 'requesty-export'. */
+  modelProvider?: string
 }
 
 export function createFakeCommandContext(options: FakeCommandContextOptions = {}) {
@@ -80,8 +82,10 @@ export function createFakeCommandContext(options: FakeCommandContextOptions = {}
   }
 
   const capturedUiOrder: ('notify' | 'confirm')[] = []
+  const modelProvider = options.modelProvider ?? 'requesty-export'
   const ctx = {
     mode: options.mode ?? 'tui',
+    model: { provider: modelProvider },
     ui: {
       notify(message: string, type?: NotificationType) {
         capturedNotifications.push({ message, type })

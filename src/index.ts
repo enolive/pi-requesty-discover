@@ -75,15 +75,15 @@ export default function (pi: ExtensionAPI) {
   })
 
   pi.on('turn_end', (_event, ctx) => {
-    void updateUsageStatus(ctx, getRequestyProviderId())
+    void updateUsageStatus(ctx)
   })
 
   pi.on('session_start', (_event, ctx) => {
-    void updateUsageStatus(ctx, getRequestyProviderId())
+    void updateUsageStatus(ctx)
   })
 
-  pi.on('model_select', (event, ctx) => {
-    void updateUsageStatus(ctx, event.model.provider)
+  pi.on('model_select', (_event, ctx) => {
+    void updateUsageStatus(ctx)
   })
 }
 
@@ -294,12 +294,12 @@ function createLoaderStatusReporter(loader: RequestyStatusLoader): StatusReporte
   }
 }
 
-export async function updateUsageStatus(ctx: ExtensionContext, activeProvider: string | undefined): Promise<void> {
+export async function updateUsageStatus(ctx: ExtensionContext): Promise<void> {
   const token: object = {}
   latestToken = token
   const providerId = getRequestyProviderId()
   if (providerId === undefined) return // not configured for Requesty: nothing to do
-  const shouldClear = activeProvider !== providerId
+  const shouldClear = ctx.model?.provider !== providerId
   try {
     if (shouldClear) {
       ctx.ui.setStatus(USAGE_STATUS_KEY, undefined)
