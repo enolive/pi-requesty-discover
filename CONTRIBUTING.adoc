@@ -32,4 +32,5 @@ Notes:
 * Keep implementation in `src/`; root `index.ts` is just the package entrypoint.
 * Edit `README.adoc` if necessary.
 * See `AGENTS.md` for detailed repository conventions.
+* See `docs/DECISIONS.adoc` for deliberate design decisions.
 * I am pretty good at identifying AI slop 😁.
