@@ -293,8 +293,7 @@ export async function updateUsageStatus(ctx: ExtensionContext, isCurrent: () => 
     const info = await fetchUsageStatus()
     if (!isCurrent()) return
     ctx.ui.setStatus(USAGE_STATUS_KEY, formatUsageStatus(info))
-  } catch (error) {
-    console.error('requesty-usage failed:', error)
+  } catch {
     // best-effort footer update: swallow fetch errors and stale-ctx throws (e.g. after /reload)
   }
 }
