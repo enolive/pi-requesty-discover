@@ -1,4 +1,9 @@
-import { ExtensionAPI, ExtensionCommandContext, ProviderModelConfig } from '@earendil-works/pi-coding-agent'
+import {
+  ExtensionAPI,
+  ExtensionCommandContext,
+  ExtensionContext,
+  ProviderModelConfig,
+} from '@earendil-works/pi-coding-agent'
 import { type Env, getEnv } from './env'
 import {
   diffModels,
@@ -7,12 +12,13 @@ import {
   type ModelsDiff,
   updateModelsJson,
 } from './models-json'
-import { discoverModels } from './requesty-api'
+import { type ApiKeyInfo, discoverModels, fetchApiUsage } from './requesty-api'
 import { checkModels, formatHealthSummary, writeHealthCheckLog } from './health-check'
 import { RequestyStatusLoader } from './ui/requesty-status-loader.ts'
 
 const COMMAND_NAME = 'requesty-discover'
 const DRY_RUN_ARG = '--dry-run'
+export const USAGE_STATUS_KEY = 'requesty-usage'
 
 interface AutocompleteItem {
   value: string
@@ -55,6 +61,9 @@ type EvaluationResult =
     }
   | { ok: false; error: unknown }
 
+// A per-instance token suppresses stale writes when turns overlap
+let latestToken: object = {}
+
 // noinspection JSUnusedGlobalSymbols
 export default function (pi: ExtensionAPI) {
   pi.registerCommand(COMMAND_NAME, {
@@ -63,6 +72,18 @@ export default function (pi: ExtensionAPI) {
     handler: async (args, ctx) => {
       await runDiscoveryWorkflow(ctx, args)
     },
+  })
+
+  pi.on('turn_end', (_event, ctx) => {
+    void updateUsageStatus(ctx)
+  })
+
+  pi.on('session_start', (_event, ctx) => {
+    void updateUsageStatus(ctx)
+  })
+
+  pi.on('model_select', (_event, ctx) => {
+    void updateUsageStatus(ctx)
   })
 }
 
@@ -271,4 +292,49 @@ function createLoaderStatusReporter(loader: RequestyStatusLoader): StatusReporte
       loader.setMessage(message)
     },
   }
+}
+
+export async function updateUsageStatus(ctx: ExtensionContext): Promise<void> {
+  if (!ctx.hasUI) return // no footer to write to (print/json mode): skip the wasted fetch
+  const token: object = {}
+  latestToken = token
+  const providerId = getRequestyProviderId()
+  if (providerId === undefined) return // not configured for Requesty: nothing to do
+  const shouldClear = ctx.model?.provider !== providerId
+  try {
+    if (shouldClear) {
+      ctx.ui.setStatus(USAGE_STATUS_KEY, undefined)
+      return
+    }
+    const info = await fetchUsageStatus()
+    if (latestToken !== token) return
+    ctx.ui.setStatus(USAGE_STATUS_KEY, formatUsageStatus(info))
+  } catch {
+    // best-effort footer update: swallow fetch errors and stale-ctx throws (e.g. after /reload)
+  }
+}
+
+/** Returns the configured Requesty provider id, or undefined when Requesty is not configured. */
+function getRequestyProviderId(): string | undefined {
+  try {
+    return getEnv().provider_id
+  } catch {
+    return undefined
+  }
+}
+
+export function formatUsageStatus(info: ApiKeyInfo): string {
+  const spend = `$${info.monthlySpend.toFixed(2)}`
+  if (info.monthlyLimit <= 0) {
+    return `Requesty Usage (${info.name}): ${spend} (unlimited)`
+  }
+  const limit = `$${info.monthlyLimit.toFixed(2)}`
+  const percent = Math.floor((info.monthlySpend / info.monthlyLimit) * 100)
+  return `Requesty Usage (${info.name}): ${spend}/${limit} (${percent}%)`
+}
+
+async function fetchUsageStatus(): Promise<ApiKeyInfo> {
+  const env = getEnv()
+  const { provider } = getRequestyConfig(env)
+  return await fetchApiUsage(provider)
 }

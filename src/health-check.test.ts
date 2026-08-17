@@ -13,7 +13,7 @@ import {
 } from './health-check'
 import { createTempDirectory, type TempDirectory } from '../test/helpers/temp-agent'
 import { server } from '../test/setup'
-import { Env } from './env.ts'
+import { Env, DEFAULT_PROVIDER_ID } from './env.ts'
 
 const PROVIDER: Provider = {
   baseUrl: 'https://router.requesty.ai/v1',
@@ -554,7 +554,7 @@ describe('health summary and log output', () => {
     health_check_log_path: '',
     health_check_mode: 'basic',
     models_json_path: '',
-    provider_id: 'requesty-export',
+    provider_id: DEFAULT_PROVIDER_ID,
     requesty_api_key: '',
   }
 

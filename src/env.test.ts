@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { getEnv } from './env'
+import { DEFAULT_PROVIDER_ID, getEnv } from './env'
 import os from 'node:os'
 
 const TEST_HOME_DIR = '/tmp/pi-requesty-home'
@@ -23,7 +23,7 @@ describe('getEnv', () => {
   it('defaults provider ID to requesty-export', () => {
     const envConfig = getEnv()
 
-    expect(envConfig.provider_id).toBe('requesty-export')
+    expect(envConfig.provider_id).toBe(DEFAULT_PROVIDER_ID)
   })
 
   it('defaults health check mode to full', () => {

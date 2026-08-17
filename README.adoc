@@ -18,6 +18,7 @@ This is a fork of https://github.com/requestyai/pi-requesty[pi-requesty] with ad
 * Health-check available models and write a log about them
 * Brief information about what was found, including added/removed models, health summary
 * Confirm before writing `models.json`, with a dry-run mode that only previews
+* A footer status line showing your monthly Requesty spend against your monthly limit
 
 == When and why use it
 
@@ -27,6 +28,7 @@ Use this extension if
 - you are limited to certain models by a company policy (for instance, for data residency/protection reasons)
 - you don't want to handcraft your own curated list of models constantly
 - you want to health-check models and preview the diff before writing
+- you want to keep in touch with your usage without having to constantly visit the Requesty dashboard
 
 == Installation
 
@@ -142,3 +144,23 @@ After a successful write, run `/reload`.
 ----
 
 Same discovery and health checks, but never prompts to write and leaves `models.json` unchanged.
+
+== Usage status
+
+The extension shows your current Requesty monthly spend as a persistent line in Pi's footer, e.g.:
+
+[source,text]
+----
+Requesty Usage (<API Key Name>): $63.55/$150.00 (42%)
+----
+
+When your API key has no monthly limit (`monthly_limit` is `0`), the limit is treated as unlimited:
+
+[source,text]
+----
+Requesty Usage (<API Key Name>): $63.55 (unlimited)
+----
+
+When you select a model from a provider other than `REQUESTY_PROVIDER_ID`, the status is cleared — there is no Requesty usage to show for it. If `REQUESTY_API_KEY` is not configured, the status is left untouched.
+
+NOTE: The footer update is best-effort and never blocks a turn. If it fails (network error, stale context after `/reload`), it fails silently without spamming notifications.

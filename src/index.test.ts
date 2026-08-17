@@ -2,8 +2,9 @@ import type { ProviderModelConfig, RegisteredCommand } from '@earendil-works/pi-
 import { describe, expect, it, vi } from 'vitest'
 import type { HealthCheckResult, Provider } from './health-check'
 import * as HealthCheckModule from './health-check'
-import * as ModelsJsonModule from './models-json'
+import type { ApiKeyInfo } from './requesty-api'
 import * as RequestyApiModule from './requesty-api'
+import * as ModelsJsonModule from './models-json'
 import * as EnvModule from './env'
 import { createFakeCommandContext, createFakePi } from '../test/helpers/fake-pi'
 import { shuffleCompareFn } from '../test/helpers/shuffle.ts'
@@ -11,9 +12,13 @@ import { shuffleCompareFn } from '../test/helpers/shuffle.ts'
 vi.mock('./health-check')
 vi.mock('./models-json')
 vi.mock('./requesty-api')
-vi.mock('./env')
+vi.mock('./env', async importOriginal => {
+  const actual = await importOriginal<typeof import('./env')>()
+  return { ...actual, getEnv: vi.fn() }
+})
 
 const COMMAND_NAME = 'requesty-discover'
+const REQUESTY_PROVIDER_ID = EnvModule.DEFAULT_PROVIDER_ID
 
 type TestCommand = Omit<RegisteredCommand, 'name' | 'sourceInfo'>
 type HealthCheckMode = 'off' | 'basic' | 'full'
@@ -24,6 +29,8 @@ type MockScenario = {
   healthResults?: HealthCheckResult[]
   getRequestyConfigError?: unknown
   discoverModelsError?: unknown
+  /** Sequential `fetchApiKeyInfo` return values, one per call (race tests). */
+  fetchApiKeyInfoResults?: Promise<ApiKeyInfo>[]
   diff?: ModelsJsonModule.ModelsDiff
 }
 
@@ -38,7 +45,7 @@ const provider = {
 
 const modelsJson = {
   providers: {
-    'requesty-export': {
+    [REQUESTY_PROVIDER_ID]: {
       name: 'Requesty',
       baseUrl: 'https://router.requesty.ai/v1',
       apiKey: 'test-key',
@@ -49,7 +56,7 @@ const modelsJson = {
 
 describe('extension registration', () => {
   it('registers requesty sync command', async () => {
-    const { command } = await loadCommand()
+    const { command } = await loadExtension()
 
     expect(command.description).toBe(
       'Dynamically discover Requesty models, run health checks, and update the local models.json.',
@@ -61,7 +68,7 @@ describe('extension registration', () => {
 
 describe('argument completions', () => {
   it('returns dry-run option for empty prefix', async () => {
-    const { command } = await loadCommand()
+    const { command } = await loadExtension()
 
     const completions = await getArgumentCompletions(command, '')
 
@@ -69,7 +76,7 @@ describe('argument completions', () => {
   })
 
   it('returns dry-run option for matching prefix', async () => {
-    const { command } = await loadCommand()
+    const { command } = await loadExtension()
 
     const completions = await getArgumentCompletions(command, '--d')
 
@@ -77,7 +84,7 @@ describe('argument completions', () => {
   })
 
   it('returns empty list for unrelated prefix', async () => {
-    const { command } = await loadCommand()
+    const { command } = await loadExtension()
 
     const completions = await getArgumentCompletions(command, '--wat')
 
@@ -88,7 +95,7 @@ describe('argument completions', () => {
 describe('discovery workflow', () => {
   it('emits notification and does not update models.json on dry-run', async () => {
     const { updateModelsJson } = configureMockedDependencies({ healthCheckMode: 'off' })
-    const { runDiscoveryWorkflow } = await loadCommand()
+    const { runDiscoveryWorkflow } = await loadExtension()
     const { ctx, capturedNotifications } = createFakeCommandContext()
 
     await runDiscoveryWorkflow(ctx, '--dry-run')
@@ -104,7 +111,7 @@ describe('discovery workflow', () => {
       createHealthCheckResult({ modelId: 'requesty/model-b', ok: true }),
     ]
     const { updateModelsJson } = configureMockedDependencies({ models, healthResults })
-    const { runDiscoveryWorkflow } = await loadCommand()
+    const { runDiscoveryWorkflow } = await loadExtension()
     const { ctx, capturedNotifications } = createFakeCommandContext({ confirmResult: true })
 
     await runDiscoveryWorkflow(ctx, '')
@@ -124,7 +131,7 @@ describe('discovery workflow', () => {
       models: [passingModel, failingModel],
       healthResults,
     })
-    const { runDiscoveryWorkflow } = await loadCommand()
+    const { runDiscoveryWorkflow } = await loadExtension()
     const { ctx, capturedNotifications } = createFakeCommandContext({ confirmResult: true })
 
     await runDiscoveryWorkflow(ctx, '')
@@ -146,7 +153,7 @@ describe('discovery workflow', () => {
       models: [failingModel1, failingModel2, failingModel3],
       healthResults: shuffledHealthResults,
     })
-    const { runDiscoveryWorkflow } = await loadCommand()
+    const { runDiscoveryWorkflow } = await loadExtension()
     const { ctx } = createFakeCommandContext({ confirmResult: true })
 
     await runDiscoveryWorkflow(ctx, '')
@@ -177,7 +184,7 @@ describe('discovery workflow', () => {
       models: [passingModel1, passingModel2, passingModel3],
       healthResults: shuffledHealthResults,
     })
-    const { runDiscoveryWorkflow } = await loadCommand()
+    const { runDiscoveryWorkflow } = await loadExtension()
     const { ctx } = createFakeCommandContext({ confirmResult: true })
 
     await runDiscoveryWorkflow(ctx, '')
@@ -198,7 +205,7 @@ describe('discovery workflow', () => {
       createHealthCheckResult({ modelId: 'requesty/model-b', ok: false }),
     ]
     const { updateModelsJson } = configureMockedDependencies({ models, healthResults })
-    const { runDiscoveryWorkflow } = await loadCommand()
+    const { runDiscoveryWorkflow } = await loadExtension()
     const { ctx, capturedNotifications } = createFakeCommandContext({ confirmResult: true })
 
     await runDiscoveryWorkflow(ctx, '')
@@ -211,7 +218,7 @@ describe('discovery workflow', () => {
     const { updateModelsJson } = configureMockedDependencies({
       getRequestyConfigError: new Error('models.json exploded'),
     })
-    const { runDiscoveryWorkflow } = await loadCommand()
+    const { runDiscoveryWorkflow } = await loadExtension()
     const { ctx, capturedNotifications } = createFakeCommandContext({ confirmResult: true })
 
     await runDiscoveryWorkflow(ctx, '')
@@ -224,7 +231,7 @@ describe('discovery workflow', () => {
     configureMockedDependencies({
       getRequestyConfigError: 'this is not an error',
     })
-    const { runDiscoveryWorkflow } = await loadCommand()
+    const { runDiscoveryWorkflow } = await loadExtension()
     const { ctx, capturedNotifications } = createFakeCommandContext({ confirmResult: true })
 
     await runDiscoveryWorkflow(ctx, '')
@@ -236,7 +243,7 @@ describe('discovery workflow', () => {
     configureMockedDependencies({
       discoverModelsError: new Error('requesty has a bad day trying to read its models'),
     })
-    const { runDiscoveryWorkflow } = await loadCommand()
+    const { runDiscoveryWorkflow } = await loadExtension()
     const { ctx, capturedNotifications } = createFakeCommandContext({ confirmResult: true })
 
     await runDiscoveryWorkflow(ctx, '')
@@ -247,7 +254,7 @@ describe('discovery workflow', () => {
   it('includes the model diff summary in the notification', async () => {
     const diff = { added: ['requesty/model-new'], removed: ['requesty/model-old'] }
     const { formatModelsDiffSummary } = configureMockedDependencies({ diff })
-    const { runDiscoveryWorkflow } = await loadCommand()
+    const { runDiscoveryWorkflow } = await loadExtension()
     const { ctx, capturedNotifications } = createFakeCommandContext({ confirmResult: true })
 
     await runDiscoveryWorkflow(ctx, '')
@@ -259,7 +266,7 @@ describe('discovery workflow', () => {
   it('includes the model diff summary even when health checks are off', async () => {
     const diff = { added: ['requesty/model-new'], removed: [] }
     const { formatModelsDiffSummary } = configureMockedDependencies({ healthCheckMode: 'off', diff })
-    const { runDiscoveryWorkflow } = await loadCommand()
+    const { runDiscoveryWorkflow } = await loadExtension()
     const { ctx, capturedNotifications } = createFakeCommandContext({ confirmResult: true })
 
     await runDiscoveryWorkflow(ctx, '')
@@ -271,7 +278,7 @@ describe('discovery workflow', () => {
   it('reports progress while checking models', async () => {
     const models = [createModel({ id: 'requesty/model-a' }), createModel({ id: 'requesty/model-b' })]
     configureMockedDependencies({ models })
-    const { runDiscoveryWorkflow } = await loadCommand()
+    const { runDiscoveryWorkflow } = await loadExtension()
     const { ctx, capturedStatuses } = createFakeCommandContext({ confirmResult: true })
 
     await runDiscoveryWorkflow(ctx, '')
@@ -290,7 +297,7 @@ describe('confirm-to-write', () => {
     it.each([true, false])('confirmation: %s', async confirmResult => {
       const models = [createModel({ id: 'requesty/model-a' })]
       configureMockedDependencies({ healthCheckMode: 'off', models })
-      const { runDiscoveryWorkflow } = await loadCommand()
+      const { runDiscoveryWorkflow } = await loadExtension()
       const { ctx, capturedUiOrder } = createFakeCommandContext({ confirmResult })
 
       await runDiscoveryWorkflow(ctx, '')
@@ -302,7 +309,7 @@ describe('confirm-to-write', () => {
   it('asks for confirmation before updating models.json', async () => {
     const models = [createModel({ id: 'requesty/model-a' })]
     const { updateModelsJson } = configureMockedDependencies({ healthCheckMode: 'off', models })
-    const { runDiscoveryWorkflow } = await loadCommand()
+    const { runDiscoveryWorkflow } = await loadExtension()
     const { ctx } = createFakeCommandContext({ confirmResult: true })
     const confirmSpy = vi.spyOn(ctx.ui, 'confirm')
 
@@ -316,7 +323,7 @@ describe('confirm-to-write', () => {
   it('does not update models.json when confirmation is declined', async () => {
     const models = [createModel({ id: 'requesty/model-a' })]
     const { updateModelsJson } = configureMockedDependencies({ healthCheckMode: 'off', models })
-    const { runDiscoveryWorkflow } = await loadCommand()
+    const { runDiscoveryWorkflow } = await loadExtension()
     const { ctx, capturedNotifications } = createFakeCommandContext({ confirmResult: false })
 
     await runDiscoveryWorkflow(ctx, '')
@@ -332,7 +339,7 @@ describe('confirm-to-write', () => {
       models,
       diff: { added: [], removed: [] },
     })
-    const { runDiscoveryWorkflow } = await loadCommand()
+    const { runDiscoveryWorkflow } = await loadExtension()
     const { ctx, capturedNotifications, capturedConfirmations } = createFakeCommandContext({ confirmResult: true })
 
     await runDiscoveryWorkflow(ctx, '')
@@ -354,7 +361,7 @@ describe('confirm-to-write', () => {
 
   it('does not ask for confirmation on dry-run', async () => {
     const { updateModelsJson } = configureMockedDependencies({ healthCheckMode: 'off' })
-    const { runDiscoveryWorkflow } = await loadCommand()
+    const { runDiscoveryWorkflow } = await loadExtension()
     const { ctx, capturedConfirmations } = createFakeCommandContext({ confirmResult: true })
 
     await runDiscoveryWorkflow(ctx, '--dry-run')
@@ -367,7 +374,7 @@ describe('confirm-to-write', () => {
     const models = [createModel({ id: 'requesty/model-a' })]
     const healthResults = [createHealthCheckResult({ modelId: 'requesty/model-a', ok: false })]
     const { updateModelsJson } = configureMockedDependencies({ models, healthResults })
-    const { runDiscoveryWorkflow } = await loadCommand()
+    const { runDiscoveryWorkflow } = await loadExtension()
     const { ctx, capturedConfirmations } = createFakeCommandContext({ confirmResult: true })
 
     await runDiscoveryWorkflow(ctx, '')
@@ -380,7 +387,7 @@ describe('confirm-to-write', () => {
     const models = [createModel({ id: 'requesty/model-a' }), createModel({ id: 'requesty/model-b' })]
     const diff = { added: ['requesty/model-new'], removed: ['requesty/model-old'] }
     configureMockedDependencies({ healthCheckMode: 'off', models, diff })
-    const { runDiscoveryWorkflow } = await loadCommand()
+    const { runDiscoveryWorkflow } = await loadExtension()
     const { ctx, capturedNotifications, capturedConfirmations } = createFakeCommandContext({ confirmResult: true })
 
     await runDiscoveryWorkflow(ctx, '')
@@ -404,7 +411,7 @@ describe('confirm-to-write', () => {
     const models = [createModel({ id: 'requesty/model-a' })]
     const diff = { added: ['requesty/model-a'], removed: [] }
     configureMockedDependencies({ models, diff })
-    const { runDiscoveryWorkflow } = await loadCommand()
+    const { runDiscoveryWorkflow } = await loadExtension()
     const { ctx, capturedNotifications, capturedConfirmations } = createFakeCommandContext({ confirmResult: true })
 
     await runDiscoveryWorkflow(ctx, '')
@@ -431,7 +438,7 @@ describe('command handler ui wiring', () => {
     const { updateModelsJson } = configureMockedDependencies({
       getRequestyConfigError: new Error('models.json exploded'),
     })
-    const { command } = await loadCommand()
+    const { command } = await loadExtension()
     const { ctx, capturedNotifications, capturedConfirmations } = createFakeCommandContext()
 
     await command.handler('', ctx)
@@ -450,7 +457,7 @@ describe('command handler ui wiring', () => {
     const { updateModelsJson } = configureMockedDependencies({
       getRequestyConfigError: 'this is not an error',
     })
-    const { command } = await loadCommand()
+    const { command } = await loadExtension()
     const { ctx, capturedNotifications, capturedConfirmations } = createFakeCommandContext()
 
     await command.handler('', ctx)
@@ -469,7 +476,7 @@ describe('command handler ui wiring', () => {
     const { updateModelsJson } = configureMockedDependencies({
       discoverModelsError: new Error('requesty has a bad day trying to read its models'),
     })
-    const { command } = await loadCommand()
+    const { command } = await loadExtension()
     const { ctx, capturedNotifications, capturedConfirmations } = createFakeCommandContext()
 
     await command.handler('', ctx)
@@ -490,7 +497,7 @@ describe('command handler ui wiring', () => {
       healthCheckMode: 'off',
       models,
     })
-    const { command } = await loadCommand()
+    const { command } = await loadExtension()
     const { ctx, capturedStatuses, capturedNotifications, capturedConfirmations } = createFakeCommandContext({
       mode: 'print',
     })
@@ -507,7 +514,7 @@ describe('command handler ui wiring', () => {
   it('uses the loader status reporter', async () => {
     const models = [createModel({ id: 'requesty/model-a' }), createModel({ id: 'requesty/model-b' })]
     configureMockedDependencies({ models })
-    const { command } = await loadCommand()
+    const { command } = await loadExtension()
     const { ctx, capturedStatuses, capturedNotifications } = createFakeCommandContext()
 
     await command.handler('', ctx)
@@ -530,7 +537,7 @@ describe('command handler ui wiring', () => {
   it('uses ui.confirm before writing', async () => {
     const models = [createModel({ id: 'requesty/model-a' })]
     const { updateModelsJson } = configureMockedDependencies({ healthCheckMode: 'off', models })
-    const { command } = await loadCommand()
+    const { command } = await loadExtension()
     const { ctx, capturedConfirmations } = createFakeCommandContext({ confirmResult: true })
 
     await command.handler('', ctx)
@@ -542,7 +549,7 @@ describe('command handler ui wiring', () => {
   it('does not write when ui.confirm is declined', async () => {
     const models = [createModel({ id: 'requesty/model-a' })]
     const { updateModelsJson } = configureMockedDependencies({ healthCheckMode: 'off', models })
-    const { command } = await loadCommand()
+    const { command } = await loadExtension()
     const { ctx, capturedConfirmations, capturedNotifications } = createFakeCommandContext({
       confirmResult: false,
     })
@@ -558,19 +565,183 @@ describe('command handler ui wiring', () => {
   })
 })
 
+describe('formatUsageStatus', () => {
+  it('formats spend and limit with percentage', async () => {
+    const { formatUsageStatus } = await loadExtension()
+    const info: ApiKeyInfo = { name: 'Playground', monthlySpend: 63.545944565, monthlyLimit: 150 }
+
+    expect(formatUsageStatus(info)).toBe('Requesty Usage (Playground): $63.55/$150.00 (42%)')
+  })
+
+  it('formats unlimited when limit is 0', async () => {
+    const { formatUsageStatus } = await loadExtension()
+    const info: ApiKeyInfo = { name: 'Unlimited', monthlySpend: 12.34, monthlyLimit: 0 }
+
+    expect(formatUsageStatus(info)).toBe('Requesty Usage (Unlimited): $12.34 (unlimited)')
+  })
+
+  it('rounds spend to two decimals', async () => {
+    const { formatUsageStatus } = await loadExtension()
+    const info: ApiKeyInfo = { name: 'Playground', monthlySpend: 1.006, monthlyLimit: 100 }
+
+    expect(formatUsageStatus(info)).toBe('Requesty Usage (Playground): $1.01/$100.00 (1%)')
+  })
+
+  it('preserves names with spaces and special characters', async () => {
+    const { formatUsageStatus } = await loadExtension()
+    const info: ApiKeyInfo = { name: 'My Team "Key"!', monthlySpend: 50, monthlyLimit: 200 }
+
+    expect(formatUsageStatus(info)).toBe('Requesty Usage (My Team "Key"!): $50.00/$200.00 (25%)')
+  })
+
+  it('shows 0% when nothing is spent', async () => {
+    const { formatUsageStatus } = await loadExtension()
+    const info: ApiKeyInfo = { name: 'Playground', monthlySpend: 0, monthlyLimit: 150 }
+
+    expect(formatUsageStatus(info)).toBe('Requesty Usage (Playground): $0.00/$150.00 (0%)')
+  })
+})
+
+describe('usage status', () => {
+  const events = ['session_start', 'turn_end', 'model_select']
+
+  it('registers all expected event handlers', async () => {
+    configureMockedDependencies()
+    const { eventHandlers } = await loadExtension()
+
+    expect(eventHandlers.get('session_start')).toBeTypeOf('function')
+    expect(eventHandlers.get('turn_end')).toBeTypeOf('function')
+    expect(eventHandlers.get('model_select')).toBeTypeOf('function')
+  })
+
+  describe('sets the usage status line', () => {
+    it.each(events)('on %s', async eventName => {
+      const apiKeyInfo: ApiKeyInfo = { name: 'Playground', monthlySpend: 63.55, monthlyLimit: 150 }
+      const fetchUsage = createResolved(apiKeyInfo)
+      configureMockedDependencies({ fetchApiKeyInfoResults: [fetchUsage] })
+      const { eventHandlers, USAGE_STATUS_KEY } = await loadExtension()
+      const { ctx, capturedStatusLines } = createFakeCommandContext()
+
+      await fireEvent(eventHandlers, eventName, ctx)
+
+      expect(capturedStatusLines).toEqual([{ key: USAGE_STATUS_KEY, text: containing('Requesty Usage (Playground)') }])
+    })
+  })
+
+  describe('clears status when a non-Requesty provider is selected', () => {
+    it.each(events)('on %s', async eventName => {
+      configureMockedDependencies()
+      const { eventHandlers, USAGE_STATUS_KEY } = await loadExtension()
+      const { ctx, capturedStatusLines } = createFakeCommandContext({ modelProvider: 'anthropic' })
+      const fetchApiKeyInfo = vi.mocked(RequestyApiModule.fetchApiUsage)
+
+      await fireEvent(eventHandlers, eventName, ctx)
+
+      expect(capturedStatusLines).toEqual([{ key: USAGE_STATUS_KEY, text: undefined }])
+      expect(fetchApiKeyInfo).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('edge cases', () => {
+    it('suppresses a stale success after a newer turn already wrote', async () => {
+      const firstInfo: ApiKeyInfo = { name: 'Slow', monthlySpend: 10, monthlyLimit: 100 }
+      const secondInfo: ApiKeyInfo = { name: 'Fast', monthlySpend: 90, monthlyLimit: 100 }
+      const first = createDeferred<ApiKeyInfo>()
+      const second = createDeferred<ApiKeyInfo>()
+      configureMockedDependencies({ fetchApiKeyInfoResults: [first.promise, second.promise] })
+      const { eventHandlers, USAGE_STATUS_KEY } = await loadExtension()
+      const { ctx, capturedStatusLines } = createFakeCommandContext()
+
+      await fireEvent(eventHandlers, 'turn_end', ctx) // first turn starts, fetch hangs on `first`
+      await fireEvent(eventHandlers, 'turn_end', ctx) // second turn starts, fetch hangs on `second`
+      second.resolve(secondInfo) // newer resolves first
+      await flushMicrotasks()
+      first.resolve(firstInfo) // older resolves after, must be suppressed
+      await flushMicrotasks()
+
+      const expected = [{ key: USAGE_STATUS_KEY, text: containing('Requesty Usage (Fast)') }]
+      expect(capturedStatusLines).toEqual(expected)
+    })
+
+    it('suppresses a stale error after a newer turn already wrote', async () => {
+      const secondInfo: ApiKeyInfo = { name: 'Fast', monthlySpend: 90, monthlyLimit: 100 }
+      const first = createDeferred<ApiKeyInfo>()
+      const second = createDeferred<ApiKeyInfo>()
+      configureMockedDependencies({ fetchApiKeyInfoResults: [first.promise, second.promise] })
+      const { eventHandlers, USAGE_STATUS_KEY } = await loadExtension()
+      const { ctx, capturedStatusLines } = createFakeCommandContext()
+
+      await fireEvent(eventHandlers, 'turn_end', ctx)
+      await fireEvent(eventHandlers, 'turn_end', ctx)
+      second.resolve(secondInfo)
+      await flushMicrotasks()
+      first.reject(new Error('HTTP 500 boom'))
+      await flushMicrotasks()
+
+      const expected = [{ key: USAGE_STATUS_KEY, text: containing('Requesty Usage (Fast)') }]
+      expect(capturedStatusLines).toEqual(expected)
+    })
+
+    it('is a no-op when getEnv throws (no Requesty key configured)', async () => {
+      vi.mocked(EnvModule.getEnv).mockThrow(new Error('apiKey must be set via REQUESTY_API_KEY env var'))
+      const { eventHandlers } = await loadExtension()
+      const { ctx, capturedStatusLines } = createFakeCommandContext({ modelProvider: 'anthropic' })
+
+      await fireEvent(eventHandlers, 'model_select', ctx)
+
+      expect(capturedStatusLines).toEqual([])
+    })
+
+    it('skips the fetch and writes nothing when there is no UI (print/json mode)', async () => {
+      configureMockedDependencies()
+      const { eventHandlers } = await loadExtension()
+      const { ctx, capturedStatusLines } = createFakeCommandContext({ hasUI: false })
+      const fetchApiKeyInfo = vi.mocked(RequestyApiModule.fetchApiUsage)
+
+      await fireEvent(eventHandlers, 'turn_end', ctx)
+
+      expect(capturedStatusLines).toEqual([])
+      expect(fetchApiKeyInfo).not.toHaveBeenCalled()
+    })
+  })
+})
+
+function createDeferred<T>(): { promise: Promise<T>; resolve: (value: T) => void; reject: (error: unknown) => void } {
+  let resolve!: (value: T) => void
+  let reject!: (error: unknown) => void
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
+}
+
+function createResolved<T>(value: T): Promise<T> {
+  return Promise.resolve(value)
+}
+
+function containing(substr: string): string {
+  return expect.stringContaining(substr) as string
+}
+
+async function flushMicrotasks(): Promise<void> {
+  await Promise.resolve()
+}
+
 /** Configure mocked domain deps. No Pi registration. */
 function configureMockedDependencies(scenario: MockScenario = {}) {
   const models = scenario.models ?? [createModel({ id: 'requesty/model-a' })]
   const healthResults = scenario.healthResults ?? models.map(model => createHealthCheckResult({ modelId: model.id }))
 
   const { updateModelsJson, formatModelsDiffSummary } = mockModelsModule(scenario)
-  const discoverModels = mockRequestyApiModule(scenario, models)
+  const { discoverModels, fetchApiKeyInfo } = mockRequestyApiModule(scenario, models)
   const { formatHealthSummary, writeHealthCheckLog } = mockHealthCheckModule(healthResults)
   mockEnvModule(scenario)
 
   return {
     updateModelsJson,
     discoverModels,
+    fetchApiKeyInfo,
     formatHealthSummary,
     writeHealthCheckLog,
     formatModelsDiffSummary,
@@ -604,7 +775,16 @@ function mockRequestyApiModule(scenario: MockScenario, models: ProviderModelConf
   } else {
     discoverModels.mockResolvedValue(models)
   }
-  return discoverModels
+  const fetchApiKeyInfo = vi.mocked(RequestyApiModule.fetchApiUsage)
+  fetchApiKeyInfo.mockReset()
+  if (scenario.fetchApiKeyInfoResults) {
+    for (const result of scenario.fetchApiKeyInfoResults) {
+      fetchApiKeyInfo.mockReturnValueOnce(result)
+    }
+  } else {
+    fetchApiKeyInfo.mockResolvedValue({ name: 'Playground', monthlySpend: 0, monthlyLimit: 0 })
+  }
+  return { discoverModels, fetchApiKeyInfo }
 }
 
 function mockHealthCheckModule(healthResults: HealthCheckResult[]) {
@@ -639,16 +819,16 @@ function mockEnvModule(options: MockScenario) {
   getEnv.mockReturnValue({
     models_json_path: MODELS_JSON_PATH,
     health_check_log_path: HEALTH_CHECK_LOG_PATH,
-    provider_id: 'requesty-export',
+    provider_id: REQUESTY_PROVIDER_ID,
     requesty_api_key: 'ignore-me-plz',
     health_check_mode: options.healthCheckMode ?? 'basic',
   })
 }
 
-/** Mini Pi glue: import extension, register command, return entrypoints. */
-async function loadCommand() {
+/** Mini Pi glue: import extension, register command + event handlers, return entrypoints. */
+async function loadExtension() {
   const extension = await import('./index')
-  const { pi, commands } = createFakePi()
+  const { pi, commands, eventHandlers } = createFakePi()
   extension.default(pi)
   const command = commands.get(COMMAND_NAME)
 
@@ -659,6 +839,9 @@ async function loadCommand() {
   return {
     command,
     runDiscoveryWorkflow: extension.runDiscoveryWorkflow,
+    formatUsageStatus: extension.formatUsageStatus,
+    USAGE_STATUS_KEY: extension.USAGE_STATUS_KEY,
+    eventHandlers,
   }
 }
 
@@ -668,6 +851,18 @@ async function getArgumentCompletions(command: TestCommand, prefix: string) {
   }
 
   return command.getArgumentCompletions(prefix)
+}
+
+async function fireEvent(
+  eventHandlers: Map<string, (...args: unknown[]) => unknown>,
+  eventName: string,
+  ctx: ReturnType<typeof createFakeCommandContext>['ctx'],
+) {
+  const handler = eventHandlers.get(eventName)
+  if (!handler) throw new Error(`${eventName} handler was not registered`)
+  // none of the handlers is actually consuming this. so there is no sense to actually pass any real value
+  const unusedEvent = {}
+  await handler(unusedEvent, ctx)
 }
 
 function createHealthCheckResult(overrides: Partial<HealthCheckResult> = {}): HealthCheckResult {

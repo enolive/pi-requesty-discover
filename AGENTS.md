@@ -95,3 +95,7 @@ are excluded automatically.
 
 Runtime dependencies belong in `dependencies`; development-only tools belong in `devDependencies`. Pi-provided packages
 such as `@earendil-works/pi-coding-agent` should stay in `peerDependencies` with a `"*"` range.
+
+## References
+
+- See `docs/DECISIONS.adoc` for design decisions.

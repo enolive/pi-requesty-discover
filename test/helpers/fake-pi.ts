@@ -1,5 +1,6 @@
 import type { ExtensionAPI, ExtensionCommandContext, RegisteredCommand } from '@earendil-works/pi-coding-agent'
 import type { RequestyStatusLoader } from '../../src/ui/requesty-status-loader.ts'
+import { DEFAULT_PROVIDER_ID } from '../../src/env'
 
 type RegisteredCommandOptions = Omit<RegisteredCommand, 'name' | 'sourceInfo'>
 type UiCustom = ExtensionCommandContext['ui']['custom']
@@ -16,27 +17,40 @@ type FakeUiCustomFactory<T> = (
   done: (result: T) => void,
 ) => UiCustomComponent | Promise<UiCustomComponent>
 
+export type CapturedEventHandler = (...args: unknown[]) => unknown
+
 export function createFakePi() {
   const commands = new Map<string, RegisteredCommandOptions>()
+  const eventHandlers = new Map<string, CapturedEventHandler>()
+
+  const on: ExtensionAPI['on'] = (event, handler) => {
+    eventHandlers.set(event, handler as CapturedEventHandler)
+  }
 
   const pi = {
     registerCommand(name: string, command: RegisteredCommandOptions) {
       commands.set(name, command)
     },
+    on,
   } as unknown as ExtensionAPI
 
-  return { pi, commands }
+  return { pi, commands, eventHandlers }
 }
 
 type FakeCommandContextOptions = {
   mode?: ExtensionCommandContext['mode']
   /** Value returned by ctx.ui.confirm. Defaults to true so existing write paths keep working. */
   confirmResult?: boolean
+  /** Provider id of the currently selected model (ctx.model.provider). Defaults to the configured Requesty provider id. */
+  modelProvider?: string
+  /** Whether a UI/footer is available (ctx.hasUI). Defaults to true; set false for print/json mode. */
+  hasUI?: boolean
 }
 
 export function createFakeCommandContext(options: FakeCommandContextOptions = {}) {
   const capturedNotifications: Array<{ message: string; type?: NotificationType }> = []
   const capturedStatuses: string[] = []
+  const capturedStatusLines: Array<{ key: string; text: string | undefined }> = []
   const capturedConfirmations: Array<{ title: string; message: string }> = []
   const confirmResult = options.confirmResult ?? true
 
@@ -71,8 +85,11 @@ export function createFakeCommandContext(options: FakeCommandContextOptions = {}
   }
 
   const capturedUiOrder: ('notify' | 'confirm')[] = []
+  const modelProvider = options.modelProvider ?? DEFAULT_PROVIDER_ID
   const ctx = {
     mode: options.mode ?? 'tui',
+    hasUI: options.hasUI ?? true,
+    model: { provider: modelProvider },
     ui: {
       notify(message: string, type?: NotificationType) {
         capturedNotifications.push({ message, type })
@@ -84,8 +101,11 @@ export function createFakeCommandContext(options: FakeCommandContextOptions = {}
         return Promise.resolve(confirmResult)
       },
       custom,
+      setStatus(key: string, text: string | undefined) {
+        capturedStatusLines.push({ key, text })
+      },
     },
   } as unknown as ExtensionCommandContext
 
-  return { ctx, capturedNotifications, capturedStatuses, capturedConfirmations, capturedUiOrder }
+  return { ctx, capturedNotifications, capturedStatuses, capturedStatusLines, capturedConfirmations, capturedUiOrder }
 }

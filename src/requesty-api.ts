@@ -3,6 +3,7 @@ import { z } from 'zod'
 
 const DEFAULT_CONTEXT_WINDOW = 128000
 const DEFAULT_MAX_TOKENS = 4096
+const REQUESTY_MANAGE_URL = 'https://api-v2.requesty.ai/v1/manage'
 
 const RequestyModelSchema = z
   .object({
@@ -65,4 +66,32 @@ export async function discoverModels(provider: Provider): Promise<ProviderModelC
 function pricePerMillionTokens(value: number | null | undefined): number {
   const raw = (value ?? 0) * 1_000_000
   return Number(raw.toFixed(3))
+}
+
+const ApiKeyInfoSchema = z
+  .object({
+    name: z.string().min(1),
+    monthly_spend: z.coerce.number(),
+    monthly_limit: z.coerce.number(),
+  })
+  .transform(value => ({
+    name: value.name,
+    monthlySpend: value.monthly_spend,
+    monthlyLimit: value.monthly_limit,
+  }))
+
+export type ApiKeyInfo = z.infer<typeof ApiKeyInfoSchema>
+
+export async function fetchApiUsage(provider: Provider): Promise<ApiKeyInfo> {
+  const url = `${REQUESTY_MANAGE_URL}/apikey/self`
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${provider.apiKey}` },
+  })
+
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status} ${response.statusText}`)
+  }
+
+  const rawData = await response.json()
+  return ApiKeyInfoSchema.parse(rawData)
 }
