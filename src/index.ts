@@ -61,6 +61,9 @@ type EvaluationResult =
     }
   | { ok: false; error: unknown }
 
+// A per-instance token suppresses stale writes when turns overlap
+let latestToken: object = {}
+
 // noinspection JSUnusedGlobalSymbols
 export default function (pi: ExtensionAPI) {
   pi.registerCommand(COMMAND_NAME, {
@@ -71,13 +74,16 @@ export default function (pi: ExtensionAPI) {
     },
   })
 
-  // Footer usage status is best-effort: fire-and-forget on each turn_end.
-  // A per-instance token suppresses stale writes when turns overlap or the ctx goes stale (e.g. /reload).
-  let latestToken: object = {}
   pi.on('turn_end', (_event, ctx) => {
-    const token: object = {}
-    latestToken = token
-    void updateUsageStatus(ctx, () => token === latestToken)
+    void updateUsageStatus(ctx, getRequestyProviderId())
+  })
+
+  pi.on('session_start', (_event, ctx) => {
+    void updateUsageStatus(ctx, getRequestyProviderId())
+  })
+
+  pi.on('model_select', (event, ctx) => {
+    void updateUsageStatus(ctx, event.model.provider)
   })
 }
 
@@ -288,13 +294,31 @@ function createLoaderStatusReporter(loader: RequestyStatusLoader): StatusReporte
   }
 }
 
-export async function updateUsageStatus(ctx: ExtensionContext, isCurrent: () => boolean): Promise<void> {
+export async function updateUsageStatus(ctx: ExtensionContext, activeProvider: string | undefined): Promise<void> {
+  const token: object = {}
+  latestToken = token
+  const providerId = getRequestyProviderId()
+  if (providerId === undefined) return // not configured for Requesty: nothing to do
+  const shouldClear = activeProvider !== providerId
   try {
+    if (shouldClear) {
+      ctx.ui.setStatus(USAGE_STATUS_KEY, undefined)
+      return
+    }
     const info = await fetchUsageStatus()
-    if (!isCurrent()) return
+    if (latestToken !== token) return
     ctx.ui.setStatus(USAGE_STATUS_KEY, formatUsageStatus(info))
   } catch {
     // best-effort footer update: swallow fetch errors and stale-ctx throws (e.g. after /reload)
+  }
+}
+
+/** Returns the configured Requesty provider id, or undefined when Requesty is not configured. */
+function getRequestyProviderId(): string | undefined {
+  try {
+    return getEnv().provider_id
+  } catch {
+    return undefined
   }
 }
 

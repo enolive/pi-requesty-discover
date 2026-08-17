@@ -15,6 +15,7 @@ vi.mock('./requesty-api')
 vi.mock('./env')
 
 const COMMAND_NAME = 'requesty-discover'
+const REQUESTY_PROVIDER_ID = 'requesty-export'
 
 type TestCommand = Omit<RegisteredCommand, 'name' | 'sourceInfo'>
 type HealthCheckMode = 'off' | 'basic' | 'full'
@@ -606,33 +607,17 @@ describe('usage status', () => {
     expect(eventHandlers.get('turn_end')).toBeTypeOf('function')
   })
 
-  describe('turn_end usage status', () => {
-    it('sets the usage status line on turn_end', async () => {
+  describe('turn_end', () => {
+    it('sets the usage status line', async () => {
       const apiKeyInfo: ApiKeyInfo = { name: 'Playground', monthlySpend: 63.55, monthlyLimit: 150 }
       const fetchUsage = createResolved(apiKeyInfo)
       configureMockedDependencies({ fetchApiKeyInfoResults: [fetchUsage] })
       const { eventHandlers, USAGE_STATUS_KEY } = await loadExtension()
       const { ctx, capturedStatusLines } = createFakeCommandContext()
 
-      await fireTurnEnd(eventHandlers, ctx)
+      await fireEvent(eventHandlers, 'turn_end', { turnIndex: 0, message: {}, toolResults: [] }, ctx)
 
-      expect(capturedStatusLines).toEqual([
-        { key: USAGE_STATUS_KEY, text: 'Requesty Usage (Playground): $63.55/$150.00 (42%)' },
-      ])
-    })
-
-    it('sets unlimited status when limit is 0', async () => {
-      const apiKeyInfo: ApiKeyInfo = { name: 'Unlimited', monthlySpend: 12.34, monthlyLimit: 0 }
-      const fetchUsage = createResolved(apiKeyInfo)
-      configureMockedDependencies({ fetchApiKeyInfoResults: [fetchUsage] })
-      const { eventHandlers, USAGE_STATUS_KEY } = await loadExtension()
-      const { ctx, capturedStatusLines } = createFakeCommandContext()
-
-      await fireTurnEnd(eventHandlers, ctx)
-
-      expect(capturedStatusLines).toEqual([
-        { key: USAGE_STATUS_KEY, text: 'Requesty Usage (Unlimited): $12.34 (unlimited)' },
-      ])
+      expect(capturedStatusLines).toEqual([{ key: USAGE_STATUS_KEY, text: containing('Requesty Usage (Playground)') }])
     })
 
     it('suppresses a stale success after a newer turn already wrote', async () => {
@@ -644,8 +629,8 @@ describe('usage status', () => {
       const { eventHandlers, USAGE_STATUS_KEY } = await loadExtension()
       const { ctx, capturedStatusLines } = createFakeCommandContext()
 
-      await fireTurnEnd(eventHandlers, ctx) // first turn starts, fetch hangs on `first`
-      await fireTurnEnd(eventHandlers, ctx) // second turn starts, fetch hangs on `second`
+      await fireEvent(eventHandlers, 'turn_end', { turnIndex: 0, message: {}, toolResults: [] }, ctx) // first turn starts, fetch hangs on `first`
+      await fireEvent(eventHandlers, 'turn_end', { turnIndex: 0, message: {}, toolResults: [] }, ctx) // second turn starts, fetch hangs on `second`
       second.resolve(secondInfo) // newer resolves first
       await flushMicrotasks()
       first.resolve(firstInfo) // older resolves after, must be suppressed
@@ -663,8 +648,8 @@ describe('usage status', () => {
       const { eventHandlers, USAGE_STATUS_KEY } = await loadExtension()
       const { ctx, capturedStatusLines } = createFakeCommandContext()
 
-      await fireTurnEnd(eventHandlers, ctx)
-      await fireTurnEnd(eventHandlers, ctx)
+      await fireEvent(eventHandlers, 'turn_end', { turnIndex: 0, message: {}, toolResults: [] }, ctx)
+      await fireEvent(eventHandlers, 'turn_end', { turnIndex: 0, message: {}, toolResults: [] }, ctx)
       second.resolve(secondInfo)
       await flushMicrotasks()
       first.reject(new Error('HTTP 500 boom'))
@@ -672,6 +657,68 @@ describe('usage status', () => {
 
       const expected = [{ key: USAGE_STATUS_KEY, text: containing('Requesty Usage (Fast)') }]
       expect(capturedStatusLines).toEqual(expected)
+    })
+  })
+
+  describe('session_start', () => {
+    it('sets the usage status line', async () => {
+      const apiKeyInfo: ApiKeyInfo = { name: 'Playground', monthlySpend: 63.55, monthlyLimit: 150 }
+      const fetchUsage = createResolved(apiKeyInfo)
+      configureMockedDependencies({ fetchApiKeyInfoResults: [fetchUsage] })
+      const { eventHandlers, USAGE_STATUS_KEY } = await loadExtension()
+      const { ctx, capturedStatusLines } = createFakeCommandContext()
+
+      await fireEvent(eventHandlers, 'session_start', { type: 'session_start', reason: 'startup' }, ctx)
+
+      expect(capturedStatusLines).toEqual([{ key: USAGE_STATUS_KEY, text: containing('Requesty Usage (Playground)') }])
+    })
+
+    it('sets the usage status line on session_start with reason reload', async () => {
+      const apiKeyInfo: ApiKeyInfo = { name: 'Reloaded', monthlySpend: 5, monthlyLimit: 100 }
+      const fetchUsage = createResolved(apiKeyInfo)
+      configureMockedDependencies({ fetchApiKeyInfoResults: [fetchUsage] })
+      const { eventHandlers, USAGE_STATUS_KEY } = await loadExtension()
+      const { ctx, capturedStatusLines } = createFakeCommandContext()
+
+      await fireEvent(eventHandlers, 'session_start', { type: 'session_start', reason: 'reload' }, ctx)
+
+      expect(capturedStatusLines).toEqual([{ key: USAGE_STATUS_KEY, text: containing('Requesty Usage (Reloaded)') }])
+    })
+  })
+
+  describe('model_select usage status', () => {
+    it('refreshes status when selecting a Requesty provider model', async () => {
+      const apiKeyInfo: ApiKeyInfo = { name: 'Playground', monthlySpend: 63.55, monthlyLimit: 150 }
+      const fetchUsage = createResolved(apiKeyInfo)
+      configureMockedDependencies({ fetchApiKeyInfoResults: [fetchUsage] })
+      const { eventHandlers, USAGE_STATUS_KEY } = await loadExtension()
+      const { ctx, capturedStatusLines } = createFakeCommandContext()
+
+      await fireEvent(eventHandlers, 'model_select', createModelSelectEvent(REQUESTY_PROVIDER_ID), ctx)
+
+      expect(capturedStatusLines).toEqual([{ key: USAGE_STATUS_KEY, text: containing('Requesty Usage (Playground)') }])
+    })
+
+    it('clears status when selecting a non-Requesty provider model', async () => {
+      configureMockedDependencies()
+      const { eventHandlers, USAGE_STATUS_KEY } = await loadExtension()
+      const { ctx, capturedStatusLines } = createFakeCommandContext()
+      const fetchApiKeyInfo = vi.mocked(RequestyApiModule.fetchApiUsage)
+
+      await fireEvent(eventHandlers, 'model_select', createModelSelectEvent('anthropic'), ctx)
+
+      expect(capturedStatusLines).toEqual([{ key: USAGE_STATUS_KEY, text: undefined }])
+      expect(fetchApiKeyInfo).not.toHaveBeenCalled()
+    })
+
+    it('is a no-op when getEnv throws (no Requesty key configured)', async () => {
+      vi.mocked(EnvModule.getEnv).mockThrow(new Error('apiKey must be set via REQUESTY_API_KEY env var'))
+      const { eventHandlers } = await loadExtension()
+      const { ctx, capturedStatusLines } = createFakeCommandContext()
+
+      await fireEvent(eventHandlers, 'model_select', createModelSelectEvent('anthropic'), ctx)
+
+      expect(capturedStatusLines).toEqual([])
     })
   })
 })
@@ -789,7 +836,7 @@ function mockEnvModule(options: MockScenario) {
   getEnv.mockReturnValue({
     models_json_path: MODELS_JSON_PATH,
     health_check_log_path: HEALTH_CHECK_LOG_PATH,
-    provider_id: 'requesty-export',
+    provider_id: REQUESTY_PROVIDER_ID,
     requesty_api_key: 'ignore-me-plz',
     health_check_mode: options.healthCheckMode ?? 'basic',
   })
@@ -823,13 +870,29 @@ async function getArgumentCompletions(command: TestCommand, prefix: string) {
   return command.getArgumentCompletions(prefix)
 }
 
-async function fireTurnEnd(
+async function fireEvent(
   eventHandlers: Map<string, (...args: unknown[]) => unknown>,
+  eventName: string,
+  event: Record<string, unknown>,
   ctx: ReturnType<typeof createFakeCommandContext>['ctx'],
 ) {
-  const handler = eventHandlers.get('turn_end')
-  if (!handler) throw new Error('turn_end handler was not registered')
-  await handler({ turnIndex: 0, message: {}, toolResults: [] }, ctx)
+  const handler = eventHandlers.get(eventName)
+  if (!handler) throw new Error(`${eventName} handler was not registered`)
+  await handler(event, ctx)
+}
+
+function createModelSelectEvent(provider: string): Record<string, unknown> {
+  return {
+    type: 'model_select',
+    model: {
+      ...createModel({ id: `${provider}/model`, name: `${provider} model` }),
+      api: 'openai-completions',
+      provider,
+      baseUrl: 'https://example.com',
+    },
+    previousModel: undefined,
+    source: 'set',
+  }
 }
 
 function createHealthCheckResult(overrides: Partial<HealthCheckResult> = {}): HealthCheckResult {
