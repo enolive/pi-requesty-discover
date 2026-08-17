@@ -1,6 +1,6 @@
 import { http, HttpResponse } from 'msw'
 import { describe, expect, it } from 'vitest'
-import { discoverModels, RequestyModel } from './requesty-api'
+import { discoverModels, fetchApiKeyInfo, manageUsageUrl, RequestyModel } from './requesty-api'
 import { server } from '../test/setup'
 
 const providerConfig = {
@@ -179,5 +179,108 @@ describe('discoverModels', () => {
     expect(models[0]?.cost.output).toBe(1.234)
     expect(models[1]?.cost.input).toBe(1.235)
     expect(models[1]?.cost.output).toBe(1.235)
+  })
+})
+
+describe('manageUsageUrl', () => {
+  describe('rewrites router to api-v2', () => {
+    it.each([
+      ['https://router.requesty.ai/v1', 'https://api-v2.requesty.ai/v1'],
+      ['https://router.requesty.com/v1', 'https://api-v2.requesty.com/v1'],
+    ])('%s -> %s', (routeUrl, expected) => {
+      expect(manageUsageUrl(routeUrl)).toBe(expected)
+    })
+  })
+
+  it('preserves the path', () => {
+    expect(manageUsageUrl('https://router.requesty.ai/v2/foo')).toBe('https://api-v2.requesty.ai/v2/foo')
+  })
+
+  it('leaves non-router hosts untouched', () => {
+    expect(manageUsageUrl('https://example.com/v1')).toBe('https://example.com/v1')
+  })
+})
+
+describe('fetchApiKeyInfo', () => {
+  const manageEndpoint = 'https://api-v2.requesty.ai/v1/manage/apikey/self'
+
+  function apiKeySelfResponse(data: Record<string, unknown>) {
+    return HttpResponse.json(data)
+  }
+
+  it('calls GET {baseUrl-derived}/manage/apikey/self', async () => {
+    let calledUrl: string | null = null
+    server.use(
+      http.get(manageEndpoint, ({ request }) => {
+        calledUrl = request.url
+        return apiKeySelfResponse({ name: 'Playground', monthly_spend: '63.545944565', monthly_limit: '150' })
+      }),
+    )
+
+    await fetchApiKeyInfo(providerConfig)
+
+    expect(calledUrl).toBe(manageEndpoint)
+  })
+
+  it('sends bearer token', async () => {
+    let authorizationHeader: string | null = null
+    server.use(
+      http.get(manageEndpoint, ({ request }) => {
+        authorizationHeader = request.headers.get('authorization')
+        return apiKeySelfResponse({ name: 'Playground', monthly_spend: '0', monthly_limit: '0' })
+      }),
+    )
+
+    await fetchApiKeyInfo(providerConfig)
+
+    expect(authorizationHeader).toBe('Bearer test-key')
+  })
+
+  it('returns parsed name, monthlySpend and monthlyLimit', async () => {
+    server.use(
+      http.get(manageEndpoint, () => {
+        return apiKeySelfResponse({ name: 'Playground', monthly_spend: '63.545944565', monthly_limit: '150' })
+      }),
+    )
+
+    const info = await fetchApiKeyInfo(providerConfig)
+
+    expect(info).toEqual({ name: 'Playground', monthlySpend: 63.545944565, monthlyLimit: 150 })
+  })
+
+  it('parses unlimited limit (0) as 0', async () => {
+    server.use(
+      http.get(manageEndpoint, () => {
+        return apiKeySelfResponse({ name: 'Unlimited', monthly_spend: '12.34', monthly_limit: '0' })
+      }),
+    )
+
+    const info = await fetchApiKeyInfo(providerConfig)
+
+    expect(info).toEqual({ name: 'Unlimited', monthlySpend: 12.34, monthlyLimit: 0 })
+  })
+
+  it('throws on HTTP error', async () => {
+    server.use(
+      http.get(manageEndpoint, () => {
+        return HttpResponse.json({ error: 'Unauthorized' }, { status: 401, statusText: 'Unauthorized' })
+      }),
+    )
+
+    const fetch = () => fetchApiKeyInfo(providerConfig)
+
+    await expect(fetch).rejects.toThrow('HTTP 401 Unauthorized')
+  })
+
+  it('throws on malformed response', async () => {
+    server.use(
+      http.get(manageEndpoint, () => {
+        return apiKeySelfResponse({ name: 'Playground' })
+      }),
+    )
+
+    const fetch = () => fetchApiKeyInfo(providerConfig)
+
+    await expect(fetch).rejects.toThrow()
   })
 })

@@ -66,3 +66,38 @@ function pricePerMillionTokens(value: number | null | undefined): number {
   const raw = (value ?? 0) * 1_000_000
   return Number(raw.toFixed(3))
 }
+
+const ApiKeyInfoSchema = z
+  .object({
+    name: z.string().min(1),
+    monthly_spend: z.coerce.number(),
+    monthly_limit: z.coerce.number(),
+  })
+  .transform(value => ({
+    name: value.name,
+    monthlySpend: value.monthly_spend,
+    monthlyLimit: value.monthly_limit,
+  }))
+
+export type ApiKeyInfo = z.infer<typeof ApiKeyInfoSchema>
+
+export function manageUsageUrl(baseUrl: string): string {
+  const url = new URL(baseUrl)
+  if (url.hostname.startsWith('router.')) {
+    url.hostname = url.hostname.replace('router.', 'api-v2.')
+  }
+  return url.toString()
+}
+
+export async function fetchApiKeyInfo(provider: Provider): Promise<ApiKeyInfo> {
+  const response = await fetch(manageUsageUrl(`${provider.baseUrl}/manage/apikey/self`), {
+    headers: { Authorization: `Bearer ${provider.apiKey}` },
+  })
+
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status} ${response.statusText}`)
+  }
+
+  const rawData = await response.json()
+  return ApiKeyInfoSchema.parse(rawData)
+}
