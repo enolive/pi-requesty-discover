@@ -1,6 +1,6 @@
 import { http, HttpResponse } from 'msw'
 import { describe, expect, it } from 'vitest'
-import { discoverModels, fetchApiKeyInfo, manageUsageUrl, RequestyModel } from './requesty-api'
+import { discoverModels, fetchApiUsage, RequestyModel } from './requesty-api'
 import { server } from '../test/setup'
 
 const providerConfig = {
@@ -182,33 +182,14 @@ describe('discoverModels', () => {
   })
 })
 
-describe('manageUsageUrl', () => {
-  describe('rewrites router to api-v2', () => {
-    it.each([
-      ['https://router.requesty.ai/v1', 'https://api-v2.requesty.ai/v1'],
-      ['https://router.requesty.com/v1', 'https://api-v2.requesty.com/v1'],
-    ])('%s -> %s', (routeUrl, expected) => {
-      expect(manageUsageUrl(routeUrl)).toBe(expected)
-    })
-  })
-
-  it('preserves the path', () => {
-    expect(manageUsageUrl('https://router.requesty.ai/v2/foo')).toBe('https://api-v2.requesty.ai/v2/foo')
-  })
-
-  it('leaves non-router hosts untouched', () => {
-    expect(manageUsageUrl('https://example.com/v1')).toBe('https://example.com/v1')
-  })
-})
-
-describe('fetchApiKeyInfo', () => {
+describe('fetchApiUsage', () => {
   const manageEndpoint = 'https://api-v2.requesty.ai/v1/manage/apikey/self'
 
   function apiKeySelfResponse(data: Record<string, unknown>) {
     return HttpResponse.json(data)
   }
 
-  it('calls GET {baseUrl-derived}/manage/apikey/self', async () => {
+  it('calls GET /manage/apikey/self', async () => {
     let calledUrl: string | null = null
     server.use(
       http.get(manageEndpoint, ({ request }) => {
@@ -217,7 +198,7 @@ describe('fetchApiKeyInfo', () => {
       }),
     )
 
-    await fetchApiKeyInfo(providerConfig)
+    await fetchApiUsage(providerConfig)
 
     expect(calledUrl).toBe(manageEndpoint)
   })
@@ -231,7 +212,7 @@ describe('fetchApiKeyInfo', () => {
       }),
     )
 
-    await fetchApiKeyInfo(providerConfig)
+    await fetchApiUsage(providerConfig)
 
     expect(authorizationHeader).toBe('Bearer test-key')
   })
@@ -243,7 +224,7 @@ describe('fetchApiKeyInfo', () => {
       }),
     )
 
-    const info = await fetchApiKeyInfo(providerConfig)
+    const info = await fetchApiUsage(providerConfig)
 
     expect(info).toEqual({ name: 'Playground', monthlySpend: 63.545944565, monthlyLimit: 150 })
   })
@@ -255,7 +236,7 @@ describe('fetchApiKeyInfo', () => {
       }),
     )
 
-    const info = await fetchApiKeyInfo(providerConfig)
+    const info = await fetchApiUsage(providerConfig)
 
     expect(info).toEqual({ name: 'Unlimited', monthlySpend: 12.34, monthlyLimit: 0 })
   })
@@ -267,7 +248,7 @@ describe('fetchApiKeyInfo', () => {
       }),
     )
 
-    const fetch = () => fetchApiKeyInfo(providerConfig)
+    const fetch = () => fetchApiUsage(providerConfig)
 
     await expect(fetch).rejects.toThrow('HTTP 401 Unauthorized')
   })
@@ -279,7 +260,7 @@ describe('fetchApiKeyInfo', () => {
       }),
     )
 
-    const fetch = () => fetchApiKeyInfo(providerConfig)
+    const fetch = () => fetchApiUsage(providerConfig)
 
     await expect(fetch).rejects.toThrow()
   })

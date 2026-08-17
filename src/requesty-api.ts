@@ -3,6 +3,7 @@ import { z } from 'zod'
 
 const DEFAULT_CONTEXT_WINDOW = 128000
 const DEFAULT_MAX_TOKENS = 4096
+const REQUESTY_MANAGE_URL = 'https://api-v2.requesty.ai/v1/manage'
 
 const RequestyModelSchema = z
   .object({
@@ -81,16 +82,9 @@ const ApiKeyInfoSchema = z
 
 export type ApiKeyInfo = z.infer<typeof ApiKeyInfoSchema>
 
-export function manageUsageUrl(baseUrl: string): string {
-  const url = new URL(baseUrl)
-  if (url.hostname.startsWith('router.')) {
-    url.hostname = url.hostname.replace('router.', 'api-v2.')
-  }
-  return url.toString()
-}
-
-export async function fetchApiKeyInfo(provider: Provider): Promise<ApiKeyInfo> {
-  const response = await fetch(manageUsageUrl(`${provider.baseUrl}/manage/apikey/self`), {
+export async function fetchApiUsage(provider: Provider): Promise<ApiKeyInfo> {
+  const url = `${REQUESTY_MANAGE_URL}/apikey/self`
+  const response = await fetch(url, {
     headers: { Authorization: `Bearer ${provider.apiKey}` },
   })
 

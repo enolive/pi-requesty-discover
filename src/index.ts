@@ -12,7 +12,7 @@ import {
   type ModelsDiff,
   updateModelsJson,
 } from './models-json'
-import { type ApiKeyInfo, discoverModels, fetchApiKeyInfo } from './requesty-api'
+import { type ApiKeyInfo, discoverModels, fetchApiUsage } from './requesty-api'
 import { checkModels, formatHealthSummary, writeHealthCheckLog } from './health-check'
 import { RequestyStatusLoader } from './ui/requesty-status-loader.ts'
 
@@ -71,8 +71,13 @@ export default function (pi: ExtensionAPI) {
     },
   })
 
-  pi.on('turn_end', async (_event, ctx) => {
-    await updateUsageStatus(ctx)
+  // Footer usage status is best-effort: fire-and-forget on each turn_end.
+  // A per-instance token suppresses stale writes when turns overlap or the ctx goes stale (e.g. /reload).
+  let latestToken: object = {}
+  pi.on('turn_end', (_event, ctx) => {
+    const token: object = {}
+    latestToken = token
+    void updateUsageStatus(ctx, () => token === latestToken)
   })
 }
 
@@ -283,28 +288,29 @@ function createLoaderStatusReporter(loader: RequestyStatusLoader): StatusReporte
   }
 }
 
-async function updateUsageStatus(ctx: ExtensionContext): Promise<void> {
+export async function updateUsageStatus(ctx: ExtensionContext, isCurrent: () => boolean): Promise<void> {
   try {
     const info = await fetchUsageStatus()
+    if (!isCurrent()) return
     ctx.ui.setStatus(USAGE_STATUS_KEY, formatUsageStatus(info))
   } catch (error) {
-    const detail = error instanceof Error ? error.message : String(error)
-    ctx.ui.notify(`${USAGE_STATUS_KEY}: Usage check failed: ${detail}`, 'error')
+    console.error('requesty-usage failed:', error)
+    // best-effort footer update: swallow fetch errors and stale-ctx throws (e.g. after /reload)
   }
 }
 
 export function formatUsageStatus(info: ApiKeyInfo): string {
   const spend = `$${info.monthlySpend.toFixed(2)}`
   if (info.monthlyLimit <= 0) {
-    return `Requesty "${info.name}": ${spend} (unlimited)`
+    return `Requesty Usage (${info.name}): ${spend} (unlimited)`
   }
   const limit = `$${info.monthlyLimit.toFixed(2)}`
   const percent = Math.floor((info.monthlySpend / info.monthlyLimit) * 100)
-  return `Requesty "${info.name}": ${spend}/${limit} (${percent}%)`
+  return `Requesty Usage (${info.name}): ${spend}/${limit} (${percent}%)`
 }
 
-async function fetchUsageStatus() {
+async function fetchUsageStatus(): Promise<ApiKeyInfo> {
   const env = getEnv()
   const { provider } = getRequestyConfig(env)
-  return await fetchApiKeyInfo(provider)
+  return await fetchApiUsage(provider)
 }

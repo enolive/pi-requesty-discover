@@ -1,10 +1,10 @@
 import type { ProviderModelConfig, RegisteredCommand } from '@earendil-works/pi-coding-agent'
 import { describe, expect, it, vi } from 'vitest'
 import type { HealthCheckResult, Provider } from './health-check'
-import type { ApiKeyInfo } from './requesty-api'
 import * as HealthCheckModule from './health-check'
-import * as ModelsJsonModule from './models-json'
+import type { ApiKeyInfo } from './requesty-api'
 import * as RequestyApiModule from './requesty-api'
+import * as ModelsJsonModule from './models-json'
 import * as EnvModule from './env'
 import { createFakeCommandContext, createFakePi } from '../test/helpers/fake-pi'
 import { shuffleCompareFn } from '../test/helpers/shuffle.ts'
@@ -25,8 +25,8 @@ type MockScenario = {
   healthResults?: HealthCheckResult[]
   getRequestyConfigError?: unknown
   discoverModelsError?: unknown
-  apiKeyInfo?: ApiKeyInfo
-  fetchApiKeyInfoError?: unknown
+  /** Sequential `fetchApiKeyInfo` return values, one per call (race tests). */
+  fetchApiKeyInfoResults?: Promise<ApiKeyInfo>[]
   diff?: ModelsJsonModule.ModelsDiff
 }
 
@@ -566,42 +566,35 @@ describe('formatUsageStatus', () => {
     const { formatUsageStatus } = await loadExtension()
     const info: ApiKeyInfo = { name: 'Playground', monthlySpend: 63.545944565, monthlyLimit: 150 }
 
-    expect(formatUsageStatus(info)).toBe('Requesty "Playground": $63.55/$150.00 (42%)')
+    expect(formatUsageStatus(info)).toBe('Requesty Usage (Playground): $63.55/$150.00 (42%)')
   })
 
   it('formats unlimited when limit is 0', async () => {
     const { formatUsageStatus } = await loadExtension()
     const info: ApiKeyInfo = { name: 'Unlimited', monthlySpend: 12.34, monthlyLimit: 0 }
 
-    expect(formatUsageStatus(info)).toBe('Requesty "Unlimited": $12.34 (unlimited)')
+    expect(formatUsageStatus(info)).toBe('Requesty Usage (Unlimited): $12.34 (unlimited)')
   })
 
   it('rounds spend to two decimals', async () => {
     const { formatUsageStatus } = await loadExtension()
     const info: ApiKeyInfo = { name: 'Playground', monthlySpend: 1.006, monthlyLimit: 100 }
 
-    expect(formatUsageStatus(info)).toBe('Requesty "Playground": $1.01/$100.00 (1%)')
+    expect(formatUsageStatus(info)).toBe('Requesty Usage (Playground): $1.01/$100.00 (1%)')
   })
 
   it('preserves names with spaces and special characters', async () => {
     const { formatUsageStatus } = await loadExtension()
     const info: ApiKeyInfo = { name: 'My Team "Key"!', monthlySpend: 50, monthlyLimit: 200 }
 
-    expect(formatUsageStatus(info)).toBe('Requesty "My Team "Key"!": $50.00/$200.00 (25%)')
+    expect(formatUsageStatus(info)).toBe('Requesty Usage (My Team "Key"!): $50.00/$200.00 (25%)')
   })
 
   it('shows 0% when nothing is spent', async () => {
     const { formatUsageStatus } = await loadExtension()
     const info: ApiKeyInfo = { name: 'Playground', monthlySpend: 0, monthlyLimit: 150 }
 
-    expect(formatUsageStatus(info)).toBe('Requesty "Playground": $0.00/$150.00 (0%)')
-  })
-
-  it('handles names containing quotes', async () => {
-    const { formatUsageStatus } = await loadExtension()
-    const info: ApiKeyInfo = { name: 'a"b', monthlySpend: 0, monthlyLimit: 0 }
-
-    expect(formatUsageStatus(info)).toBe('Requesty "a"b": $0.00 (unlimited)')
+    expect(formatUsageStatus(info)).toBe('Requesty Usage (Playground): $0.00/$150.00 (0%)')
   })
 })
 
@@ -616,42 +609,94 @@ describe('usage status', () => {
   describe('turn_end usage status', () => {
     it('sets the usage status line on turn_end', async () => {
       const apiKeyInfo: ApiKeyInfo = { name: 'Playground', monthlySpend: 63.55, monthlyLimit: 150 }
-      configureMockedDependencies({ apiKeyInfo })
+      const fetchUsage = createResolved(apiKeyInfo)
+      configureMockedDependencies({ fetchApiKeyInfoResults: [fetchUsage] })
       const { eventHandlers, USAGE_STATUS_KEY } = await loadExtension()
       const { ctx, capturedStatusLines } = createFakeCommandContext()
 
       await fireTurnEnd(eventHandlers, ctx)
 
       expect(capturedStatusLines).toEqual([
-        { key: USAGE_STATUS_KEY, text: 'Requesty "Playground": $63.55/$150.00 (42%)' },
+        { key: USAGE_STATUS_KEY, text: 'Requesty Usage (Playground): $63.55/$150.00 (42%)' },
       ])
     })
 
     it('sets unlimited status when limit is 0', async () => {
       const apiKeyInfo: ApiKeyInfo = { name: 'Unlimited', monthlySpend: 12.34, monthlyLimit: 0 }
-      configureMockedDependencies({ apiKeyInfo })
+      const fetchUsage = createResolved(apiKeyInfo)
+      configureMockedDependencies({ fetchApiKeyInfoResults: [fetchUsage] })
       const { eventHandlers, USAGE_STATUS_KEY } = await loadExtension()
       const { ctx, capturedStatusLines } = createFakeCommandContext()
 
       await fireTurnEnd(eventHandlers, ctx)
 
-      expect(capturedStatusLines).toEqual([{ key: USAGE_STATUS_KEY, text: 'Requesty "Unlimited": $12.34 (unlimited)' }])
+      expect(capturedStatusLines).toEqual([
+        { key: USAGE_STATUS_KEY, text: 'Requesty Usage (Unlimited): $12.34 (unlimited)' },
+      ])
     })
 
-    it('notifies error and leaves status untouched when fetch fails', async () => {
-      configureMockedDependencies({ fetchApiKeyInfoError: new Error('HTTP 401 Unauthorized') })
+    it('suppresses a stale success after a newer turn already wrote', async () => {
+      const firstInfo: ApiKeyInfo = { name: 'Slow', monthlySpend: 10, monthlyLimit: 100 }
+      const secondInfo: ApiKeyInfo = { name: 'Fast', monthlySpend: 90, monthlyLimit: 100 }
+      const first = createDeferred<ApiKeyInfo>()
+      const second = createDeferred<ApiKeyInfo>()
+      configureMockedDependencies({ fetchApiKeyInfoResults: [first.promise, second.promise] })
       const { eventHandlers, USAGE_STATUS_KEY } = await loadExtension()
-      const { ctx, capturedStatusLines, capturedNotifications } = createFakeCommandContext()
+      const { ctx, capturedStatusLines } = createFakeCommandContext()
+
+      await fireTurnEnd(eventHandlers, ctx) // first turn starts, fetch hangs on `first`
+      await fireTurnEnd(eventHandlers, ctx) // second turn starts, fetch hangs on `second`
+      second.resolve(secondInfo) // newer resolves first
+      await flushMicrotasks()
+      first.resolve(firstInfo) // older resolves after, must be suppressed
+      await flushMicrotasks()
+
+      const expected = [{ key: USAGE_STATUS_KEY, text: containing('Requesty Usage (Fast)') }]
+      expect(capturedStatusLines).toEqual(expected)
+    })
+
+    it('suppresses a stale error after a newer turn already wrote', async () => {
+      const secondInfo: ApiKeyInfo = { name: 'Fast', monthlySpend: 90, monthlyLimit: 100 }
+      const first = createDeferred<ApiKeyInfo>()
+      const second = createDeferred<ApiKeyInfo>()
+      configureMockedDependencies({ fetchApiKeyInfoResults: [first.promise, second.promise] })
+      const { eventHandlers, USAGE_STATUS_KEY } = await loadExtension()
+      const { ctx, capturedStatusLines } = createFakeCommandContext()
 
       await fireTurnEnd(eventHandlers, ctx)
+      await fireTurnEnd(eventHandlers, ctx)
+      second.resolve(secondInfo)
+      await flushMicrotasks()
+      first.reject(new Error('HTTP 500 boom'))
+      await flushMicrotasks()
 
-      expect(capturedStatusLines).toEqual([])
-      expect(capturedNotifications).toEqual([
-        { message: `${USAGE_STATUS_KEY}: Usage check failed: HTTP 401 Unauthorized`, type: 'error' },
-      ])
+      const expected = [{ key: USAGE_STATUS_KEY, text: containing('Requesty Usage (Fast)') }]
+      expect(capturedStatusLines).toEqual(expected)
     })
   })
 })
+
+function createDeferred<T>(): { promise: Promise<T>; resolve: (value: T) => void; reject: (error: unknown) => void } {
+  let resolve!: (value: T) => void
+  let reject!: (error: unknown) => void
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
+}
+
+function createResolved<T>(value: T): Promise<T> {
+  return Promise.resolve(value)
+}
+
+function containing(substr: string): string {
+  return expect.stringContaining(substr) as string
+}
+
+async function flushMicrotasks(): Promise<void> {
+  await Promise.resolve()
+}
 
 /** Configure mocked domain deps. No Pi registration. */
 function configureMockedDependencies(scenario: MockScenario = {}) {
@@ -700,11 +745,14 @@ function mockRequestyApiModule(scenario: MockScenario, models: ProviderModelConf
   } else {
     discoverModels.mockResolvedValue(models)
   }
-  const fetchApiKeyInfo = vi.mocked(RequestyApiModule.fetchApiKeyInfo)
-  if (scenario.fetchApiKeyInfoError) {
-    fetchApiKeyInfo.mockRejectedValue(scenario.fetchApiKeyInfoError)
+  const fetchApiKeyInfo = vi.mocked(RequestyApiModule.fetchApiUsage)
+  fetchApiKeyInfo.mockReset()
+  if (scenario.fetchApiKeyInfoResults) {
+    for (const result of scenario.fetchApiKeyInfoResults) {
+      fetchApiKeyInfo.mockReturnValueOnce(result)
+    }
   } else {
-    fetchApiKeyInfo.mockResolvedValue(scenario.apiKeyInfo ?? { name: 'Playground', monthlySpend: 0, monthlyLimit: 0 })
+    fetchApiKeyInfo.mockResolvedValue({ name: 'Playground', monthlySpend: 0, monthlyLimit: 0 })
   }
   return { discoverModels, fetchApiKeyInfo }
 }
