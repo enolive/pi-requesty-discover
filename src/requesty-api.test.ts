@@ -1,7 +1,8 @@
-import { http, HttpResponse } from 'msw'
+import { delay, http, HttpResponse } from 'msw'
 import { describe, expect, it } from 'vitest'
 import { discoverModels, fetchApiUsage, RequestyModel } from './requesty-api'
 import { server } from '../test/setup'
+import { ZodError } from 'zod'
 
 const providerConfig = {
   baseUrl: 'https://router.requesty.ai/v1',
@@ -86,6 +87,19 @@ describe('discoverModels', () => {
 
     expect(models).toHaveLength(1)
     expect(models[0]?.id).toBe('requesty/valid-model')
+  })
+
+  it('throws on timeout', async () => {
+    server.use(
+      http.get(modelsEndpoint, async () => {
+        await delay(5)
+        return HttpResponse.json({ data: {} })
+      }),
+    )
+
+    const fetch = () => discoverModels(providerConfig, { timeoutMs: 5 })
+
+    await expect(fetch).rejects.toThrow('The operation was aborted due to timeout')
   })
 
   it('maps Requesty model fields', async () => {
@@ -262,6 +276,19 @@ describe('fetchApiUsage', () => {
 
     const fetch = () => fetchApiUsage(providerConfig)
 
-    await expect(fetch).rejects.toThrow()
+    await expect(fetch).rejects.toThrow(ZodError)
+  })
+
+  it('throws on timeout', async () => {
+    server.use(
+      http.get(manageEndpoint, async () => {
+        await delay(50)
+        return apiKeySelfResponse({ name: 'Playground' })
+      }),
+    )
+
+    const fetch = () => fetchApiUsage(providerConfig, { timeoutMs: 5 })
+
+    await expect(fetch).rejects.toThrow('The operation was aborted due to timeout')
   })
 })

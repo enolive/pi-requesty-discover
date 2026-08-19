@@ -31,9 +31,14 @@ type Provider = {
   apiKey: string
 }
 
-export async function discoverModels(provider: Provider): Promise<ProviderModelConfig[]> {
+export async function discoverModels(
+  provider: Provider,
+  options: { timeoutMs?: number } = {},
+): Promise<ProviderModelConfig[]> {
+  const timeoutMs = options.timeoutMs ?? 5_000
   const response = await fetch(`${provider.baseUrl}/models`, {
     headers: { Authorization: `Bearer ${provider.apiKey}` },
+    signal: AbortSignal.timeout(timeoutMs),
   })
 
   if (!response.ok) {
@@ -82,10 +87,12 @@ const ApiKeyInfoSchema = z
 
 export type ApiKeyInfo = z.infer<typeof ApiKeyInfoSchema>
 
-export async function fetchApiUsage(provider: Provider): Promise<ApiKeyInfo> {
+export async function fetchApiUsage(provider: Provider, options: { timeoutMs?: number } = {}): Promise<ApiKeyInfo> {
   const url = `${REQUESTY_MANAGE_URL}/apikey/self`
+  const timeoutMs = options.timeoutMs ?? 2_000
   const response = await fetch(url, {
     headers: { Authorization: `Bearer ${provider.apiKey}` },
+    signal: AbortSignal.timeout(timeoutMs),
   })
 
   if (!response.ok) {
