@@ -14,6 +14,22 @@ token/model state. No "extra footer" API exists.
 Decision: keep `setStatus`. Revisit when the line overflows visibly with other
 extensions' statuses, or if the usage string grows past a typical width.
 
+== Hand-rolled `Try<T>` instead of an effects library
+
+Context: env loading and discovery evaluation both need a caught-error result value
+(`{ ok: true, value } | { ok: false, error }`). Libraries like Effect ship an
+industrial `Either`/`Effect.try` for exactly this.
+
+Why not: Effect is a runtime, a generator DSL, and a worldview — not a utility.
+Two call sites in a Pi extension don't justify the dependency weight or the
+learning curve for contributors. The hand-rolled version is ~10 lines
+(`Try<T>`, `runCatching`, `runCatchingAsync`, named after Kotlin's `Result`),
+lives in `src/index.ts`, and documents intent just as well.
+
+Decision: keep the hand-rolled `Try<T>`. No `monads.ts` module either — rule of
+three. Revisit if the extension ever needs typed errors, retries, or resource
+scoping; that's the day Effect earns its place.
+
 == Not a provider — a models.json-writing extension
 
 Context: Requesty already works as a Pi provider via `models.json`. The temptation

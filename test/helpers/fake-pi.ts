@@ -109,3 +109,15 @@ export function createFakeCommandContext(options: FakeCommandContextOptions = {}
 
   return { ctx, capturedNotifications, capturedStatuses, capturedStatusLines, capturedConfirmations, capturedUiOrder }
 }
+
+export async function fireEvent(
+  eventHandlers: Map<string, (...args: unknown[]) => unknown>,
+  eventName: string,
+  ctx: ReturnType<typeof createFakeCommandContext>['ctx'],
+) {
+  const handler = eventHandlers.get(eventName)
+  if (!handler) throw new Error(`${eventName} handler was not registered`)
+  // none of the handlers is actually consuming this. so there is no sense to actually pass any real value
+  const unusedEvent = {}
+  await handler(unusedEvent, ctx)
+}

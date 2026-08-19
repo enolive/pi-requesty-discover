@@ -25,7 +25,7 @@ const ModelsJsonSchema = z
 type ModelsJson = z.infer<typeof ModelsJsonSchema>
 type ModelsJsonProvider = z.infer<typeof ProviderSchema>
 
-type RequestyProvider = ModelsJsonProvider & {
+export type RequestyProvider = ModelsJsonProvider & {
   name: string
   baseUrl: string
   apiKey: string

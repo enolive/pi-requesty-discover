@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll } from 'vitest'
+import { afterAll, afterEach, beforeAll, vi } from 'vitest'
 import { setupServer } from 'msw/node'
 
 export const server = setupServer()
@@ -8,7 +8,10 @@ beforeAll(() => {
 })
 
 afterEach(() => {
+  // reset any existing MSW handlers
   server.resetHandlers()
+  // reset any fake timers that might exist
+  vi.useRealTimers()
 })
 
 afterAll(() => {

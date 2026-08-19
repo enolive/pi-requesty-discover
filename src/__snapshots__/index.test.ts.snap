@@ -47,6 +47,15 @@ Left models.json unchanged.",
 ]
 `;
 
+exports[`discovery workflow > does nothing when env load fails 1`] = `
+[
+  {
+    "message": "requesty-discover: failed to load env: env load failed",
+    "type": "error",
+  },
+]
+`;
+
 exports[`discovery workflow > emits notification and does not update models.json on dry-run 1`] = `
 [
   {
@@ -113,6 +122,15 @@ Full health check log: /tmp/pi-requesty-home/.pi/agent/requesty-health-check.log
   {
     "message": "requesty-discover: Updated models.json. Run /reload to use the changes.",
     "type": "info",
+  },
+]
+`;
+
+exports[`usage status > edge cases > shows env load errors on session_start 1`] = `
+[
+  {
+    "message": "requesty-discover: failed to load env: I am error",
+    "type": "error",
   },
 ]
 `;
