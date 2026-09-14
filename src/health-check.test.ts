@@ -227,10 +227,11 @@ describe('postChatCompletion', () => {
         return sseResponse([positiveStreamChunk])
       }),
     )
+    const body = { ...CHAT_BODY, model: 'provider/model-to-test' }
 
-    await postChatCompletion(PROVIDER, CHAT_BODY)
+    await postChatCompletion(PROVIDER, body)
 
-    expect(requestBody).toMatchObject({ model: 'requesty/test-model' })
+    expect(requestBody).toMatchObject({ model: 'provider/model-to-test' })
   })
 
   it('sends stream:true in request body', async () => {
