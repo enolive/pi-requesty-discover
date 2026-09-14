@@ -2,6 +2,9 @@
 *.test.ts
 __snapshots__/
 
+# Scripts
+scripts/
+
 # Test directories
 test/
 coverage/
@@ -24,3 +27,4 @@ tsconfig.json
 .gitignore
 AGENTS.md
 README.adoc
+docs/
