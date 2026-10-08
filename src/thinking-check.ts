@@ -49,9 +49,32 @@ export type ThinkingCheckProgress = {
   error?: string
 }
 
+export type ProbePromptType = 'base' | 'troll'
+
+const BASE_PROMPT = `
+      Is 17 a prime number? Think briefly, then answer.
+      Answer with a simple either \`yes\` or \`no\` followed with a brief why:
+      `
+
+const TROLL_PROMPT = `
+      Does the JavaScript function fac(n) terminate for n=0? Take everything about it into account, especially the execution environment.
+      Answer with a simple either \`yes\` or \`no\` followed with a brief why:
+
+      \`\`\`js
+      const Y = g => (x => g(n => x(x)(n)))(x => g(n => x(x)(n)));
+      const facAcc = Y(self => n => acc => n > 1 ? self(n - 1)(acc * n) : n ? acc : self(n)(acc));
+      const fac = n => facAcc(n)(1);
+      \`\`\`
+      `
+
+export function getProbePrompt(type: ProbePromptType): string {
+  return type === 'troll' ? TROLL_PROMPT : BASE_PROMPT
+}
+
 export async function checkThinkingModes(
   provider: Provider,
   model: ProviderModelConfig,
+  promptType: ProbePromptType = 'base',
   onProgress?: (progress: ThinkingCheckProgress) => void,
 ): Promise<ThinkingCheckResult> {
   const configured = (model.thinkingLevelMap ?? {}) as Partial<Record<ThinkingLevel, string | null>>
@@ -77,17 +100,13 @@ export async function checkThinkingModes(
     }
 
     // no max_tokens: collides with thinking budgets on some providers
-    const trollPrompt = `
-      Does this JavaScript function terminate for n=0? Take everything about it into account, especially the execution environment. 
-      Answer with a simple either \`yes\` or \`no\` followed with a brief why: 
-      \`function f(n){ return n ? f(n-1) : f(n) }\`
-      `
+    const prompt = getProbePrompt(promptType)
     const check = await postChatCompletion(provider, {
       model: model.id,
       messages: [
         {
           role: 'user',
-          content: trollPrompt,
+          content: prompt,
         },
       ],
       reasoning_effort: (level === 'off'

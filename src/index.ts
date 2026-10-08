@@ -13,7 +13,7 @@ import {
   getArgumentCompletions,
 } from './discovery'
 import { type DiscoverySettings, readDiscoverySettings } from './settings'
-import { checkThinkingModes, formatThinkingCheckReport } from './thinking-check'
+import { checkThinkingModes, formatThinkingCheckReport, type ProbePromptType } from './thinking-check'
 import { runCatching, runCatchingAsync, type Try } from './utils'
 
 const COMMAND_NAME = 'requesty-discover'
@@ -46,8 +46,17 @@ export default function (pi: ExtensionAPI) {
 
   pi.registerCommand(THINKING_CHECK_COMMAND_NAME, {
     description: 'Probe each pi thinking level of the current model against Requesty.',
-    handler: async (_args, ctx) => {
-      await runThinkingCheck(ctx, settings.value, env.value)
+    getArgumentCompletions: (prefix: string) => {
+      const options = [
+        { label: 'base', value: 'base', description: 'simple prime question (default)' },
+        { label: 'troll', value: 'troll', description: 'Y-combinator bad-factorial trap' },
+      ]
+      if (!prefix) return options
+      return options.filter(o => o.value.toLowerCase().startsWith(prefix.toLowerCase()))
+    },
+    handler: async (args, ctx) => {
+      const promptType = (args.trim() || 'base') as ProbePromptType
+      await runThinkingCheck(ctx, settings.value, env.value, promptType)
     },
   })
 
@@ -157,6 +166,7 @@ export async function runThinkingCheck(
   ctx: ExtensionCommandContext,
   settings: DiscoverySettings,
   env: Env,
+  promptType: ProbePromptType = 'base',
 ): Promise<void> {
   const notify = (message: string) => {
     if (ctx.hasUI) ctx.ui.notify(message, 'info')
@@ -177,11 +187,16 @@ export async function runThinkingCheck(
     return
   }
 
+  if (promptType !== 'base' && promptType !== 'troll') {
+    notify(`Unknown probe type. Use "base" or "troll".`)
+    return
+  }
+
   notify(
-    `Probing thinking levels of ${model.id} (${Object.keys(model.thinkingLevelMap ?? {}).length} mapped levels)...`,
+    `Probing thinking levels of ${model.id} (${Object.keys(model.thinkingLevelMap ?? {}).length} mapped levels, ${promptType} prompt)...`,
   )
   const { provider } = await getRequestyConfig(createGetApiKey(ctx), settings, env)
-  const result = await checkThinkingModes(provider, model, progress => {
+  const result = await checkThinkingModes(provider, model, promptType, progress => {
     const extra = progress.error ? `: ${progress.error}` : ''
     notify(`  ${progress.level} -> ${progress.mappedValue}: ${progress.status}${extra}`)
     if (progress.reasoningText) {
