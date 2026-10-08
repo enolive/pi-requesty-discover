@@ -1,0 +1,97 @@
+# Thinking Mode Check — Plan
+
+Status: in progress (collab session). Steps 1–2 done as prototype; step 0 verifies them before
+steps 3–5 (persistence, UX) are built.
+
+## Motivation
+
+Requesty routes to many providers whose thinking controls don't match Pi's `thinkingLevelMap`
+levels. Today, finding out which pi levels actually work for a given model is manual
+trial-and-error, and the verified knowledge is lost every time. This feature probes the current
+model's thinking levels through the real API, shows live progress, and persists the verified map
+to models.json — so `/thinking` just works, and re-running discovery doesn't undo it.
+
+The prototype (steps 1–2) made the idea plausible, but its validity is not proven yet.
+
+## Steps
+
+### 0. Verify the probe's validity with the prototype — TODO (gate for all further steps)
+
+- Run the prototype probe (`/requesty-thinking-check`) against several real Requesty models,
+  including one with a known-good thinkingLevelMap (e.g. a model Pi already maps correctly) and
+  at least one Anthropic-backed model (e.g. Opus 5.5, which showed empty reasoning deltas).
+- Check that the results match the known behavior: levels known to work report `ok`, levels
+  known to fail report `error`/`warning` with a plausible message.
+- If the probe's verdicts don't match reality, fix the heuristics (reasoning-delta detection,
+  default map) before building persistence on top. The raw-delta debug output exists exactly
+  for this.
+
+### 1. Probe core (src/thinking-check.ts, src/health-check.ts) — DONE
+
+- `checkThinkingModes(provider, model, onProgress?)`: iterates pi levels
+  (`off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`); levels mapped to `null`/absent
+  report `unsupported`; `off` passes without reasoning deltas by design; other levels send a
+  streamed completion with `reasoning_effort: <mappedValue>` (no `max_tokens` — collides with
+  thinking budgets).
+- Default map (`off`–`max` → same-named OpenAI-style effort values) used when a reasoning model
+  has no `thinkingLevelMap`. All seven levels are covered.
+- Stronger check: `verifyFirstStreamChunk` in `health-check.ts` tracks non-empty
+  `reasoning`/`reasoning_content` deltas (`sawReasoning`, first 500 chars of reasoning text); a
+  reasoning level streaming without reasoning deltas → `warning` ("silently ignored").
+- Raw first stream deltas are captured and displayed when no reasoning was seen (debugging aid
+  for providers that normalize thinking into unexpected fields). Keep until step 4 has been
+  exercised against more models.
+
+### 2. Command wiring (src/index.ts) — DONE
+
+- `/requesty-thinking-check` command: probes the current model only, and only when its provider
+  is the configured Requesty provider; resolves baseUrl/apiKey via `getRequestyConfig`; per-level
+  progress notifications plus the report table at the end.
+
+### 3. Preserve thinkingLevelMap across discovery updates (src/models-json.ts + test) — TODO
+
+- `updateModelsJson` currently rebuilds each model entry from scratch and drops any
+  `thinkingLevelMap`. Carry over `thinkingLevelMap` (and per-model passthrough fields generally)
+  from the existing models.json entry when the model id matches.
+- TDD: add a failing test proving the map survives an update, then fix.
+
+### 4. Persist probe results to models.json (src/thinking-check.ts, src/index.ts) — TODO
+
+- After probing, build a map from the results:
+  - `ok`/`warning` → mapped value
+  - `error` → `null` (explicitly unsupported)
+  - `unsupported`/unprobed → inherit the existing key
+- Merge over the model's current map in models.json, confirm via `ui.confirm`, write models.json,
+  then refresh the model registry (reuse the `createRefreshRegistry` pattern) so `/thinking`
+  reflects the new map without a restart.
+
+### 5. Spinner UX with live status (src/index.ts, src/ui/requesty-status-loader.ts) — TODO
+
+- In TUI mode, run the probe inside `ctx.ui.custom` with `RequestyStatusLoader` (same pattern as
+  discovery): each `onProgress` event updates `loader.setMessage()`, e.g.
+  `probing medium -> medium... 2.1s ok`.
+- Report table and confirmation dialog appear after the widget closes.
+- Console mode keeps the current line-by-line output.
+
+### 6. Verify persisted map with the probe — TODO
+
+- After step 4 has written a map, re-run the probe against the persisted values
+  (fresh models.json entry, no default map fallback) to confirm the written levels actually work
+  end-to-end through Pi's own model resolution.
+- Catch discrepancies (e.g. a level that passed probing but fails after persistence) and fix the
+  merge semantics from step 4 if needed.
+- This is the acceptance test for steps 4–5 before calling the feature complete.
+
+### 7. Sensible defaults for known models — DEFERRED (concrete trigger)
+
+- Curated default maps (Claude/Gemini/GPT/DeepSeek/Qwen families) in `thinking-check.ts`, added
+  once ground truth has been collected from real probe runs via steps 4–5.
+- Deferral trigger: first real-world probe data from persisted maps. Not a vague "when we have
+  time" — the data arrives as a byproduct of using the feature.
+
+## Conventions reminders for this session
+
+- TDD for behavior changes (red → green → refactor), tests colocated in `src/*.test.ts`.
+- Run `npm run check` and `npm test` before handing off.
+- No `docs/DECISIONS.adoc` entry needed unless a non-obvious trade-off emerges (step 4's merge
+  semantics might qualify; decide when implementing).
