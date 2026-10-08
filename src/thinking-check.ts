@@ -109,20 +109,33 @@ export async function checkThinkingModes(
       continue
     }
 
-    const passed: ThinkingModeResult = {
-      level,
-      mappedValue,
-      status: check.sawReasoning || level === 'off' ? 'ok' : 'warning',
-      latencyMs: check.latencyMs,
-      sawReasoning: check.sawReasoning,
-      reasoningText: check.reasoningText,
-      contentText: check.contentText,
-      rawDeltas: check.rawDeltas,
-      error:
-        check.sawReasoning || level === 'off'
-          ? undefined
-          : 'No reasoning delta in stream — level may be silently ignored',
-    }
+    const passed: ThinkingModeResult =
+      level === 'off' && check.sawReasoning
+        ? {
+            level,
+            mappedValue,
+            status: 'warning',
+            latencyMs: check.latencyMs,
+            sawReasoning: check.sawReasoning,
+            reasoningText: check.reasoningText,
+            contentText: check.contentText,
+            rawDeltas: check.rawDeltas,
+            error: 'Reasoning seen although the level is off — the model may think server-side regardless',
+          }
+        : {
+            level,
+            mappedValue,
+            status: check.sawReasoning || level === 'off' ? 'ok' : 'warning',
+            latencyMs: check.latencyMs,
+            sawReasoning: check.sawReasoning,
+            reasoningText: check.reasoningText,
+            contentText: check.contentText,
+            rawDeltas: check.rawDeltas,
+            error:
+              check.sawReasoning || level === 'off'
+                ? undefined
+                : 'No reasoning delta in stream — level may be silently ignored',
+          }
     onProgress?.(passed)
     results.push(passed)
   }
