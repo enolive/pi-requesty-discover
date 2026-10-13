@@ -10,7 +10,7 @@ import { createTempDirectory, type TempDirectory } from '../test/helpers/temp-ag
 const PROVIDER_ID = DEFAULT_PROVIDER_ID
 
 type TestProvider = Record<string, unknown> & { models?: unknown }
-type TestModelsJson = { providers: Record<string, TestProvider> }
+type TestModelsJson = Record<string, unknown> & { providers: Record<string, TestProvider> }
 
 describe('getRequestyConfig', () => {
   let tempDirectory: TempDirectory
@@ -145,6 +145,20 @@ describe('getRequestyConfig', () => {
     const config = await getRequestyConfig(getApiKey, settings, envConfig)
 
     expect(config.existingModelIds).toEqual(['requesty/model-a', 'requesty/model-b'])
+  })
+
+  it('reads schema', async () => {
+    const schemaValue = 'https://pi.dev/schemas/models.schema.json'
+    const envConfig = await createEnvWithModelsJson(tempDirectory, {
+      $schema: schemaValue,
+      providers: { [PROVIDER_ID]: { apiKey: 'models-json-key' } },
+    })
+    const settings = createTestSettings()
+    const getApiKey = createGetApiKey()
+
+    const config = await getRequestyConfig(getApiKey, settings, envConfig)
+
+    expect(config.data.$schema).toEqual(schemaValue)
   })
 
   it('exposes empty existing model IDs when provider has no models', async () => {
@@ -304,6 +318,84 @@ describe('updateModelsJson', () => {
 
     const written = await readModelsJsonFile(envConfig)
     expect(written.providers.anthropic).toEqual(originalAnthropicProvider)
+  })
+
+  it('preserves schema', async () => {
+    const schemaValue = 'https://pi.dev/schemas/models.schema.json'
+    const envConfig = await createEnvWithModelsJson(tempDirectory, {
+      $schema: schemaValue,
+      providers: {
+        [PROVIDER_ID]: { apiKey: 'models-json-key', models: [] },
+      },
+    })
+    const registry = createGetApiKey()
+    const settings = createTestSettings()
+    const data = (await getRequestyConfig(registry, settings, envConfig)).data
+    const models = [createModel()]
+
+    updateModelsJson(data, models, settings, envConfig)
+
+    const written = await readModelsJsonFile(envConfig)
+    expect(written['$schema']).toEqual(schemaValue)
+  })
+
+  it('preserves extra properties', async () => {
+    const envConfig = await createEnvWithModelsJson(tempDirectory, {
+      foo: 1,
+      bar: 'test',
+      providers: {
+        [PROVIDER_ID]: { apiKey: 'models-json-key', models: [] },
+      },
+    })
+    const registry = createGetApiKey()
+    const settings = createTestSettings()
+    const data = (await getRequestyConfig(registry, settings, envConfig)).data
+    const models = [createModel()]
+
+    updateModelsJson(data, models, settings, envConfig)
+
+    const written = await readModelsJsonFile(envConfig)
+    expect(written['foo']).toEqual(1)
+    expect(written['bar']).toEqual('test')
+  })
+
+  it('writes providers as the last entry with present $schema', async () => {
+    const envConfig = await createEnvWithModelsJson(tempDirectory, {
+      foo: 1,
+      bar: 'test',
+      $schema: 'schema',
+      providers: {
+        [PROVIDER_ID]: { apiKey: 'models-json-key', models: [] },
+      },
+    })
+    const registry = createGetApiKey()
+    const settings = createTestSettings()
+    const data = (await getRequestyConfig(registry, settings, envConfig)).data
+    const models = [createModel()]
+
+    updateModelsJson(data, models, settings, envConfig)
+
+    const written = await readModelsJsonFile(envConfig)
+    expect(Object.keys(written)).toEqual(['$schema', 'foo', 'bar', 'providers'])
+  })
+
+  it('writes providers as the last entry with absent $schema', async () => {
+    const envConfig = await createEnvWithModelsJson(tempDirectory, {
+      foo: 1,
+      bar: 'test',
+      providers: {
+        [PROVIDER_ID]: { apiKey: 'models-json-key', models: [] },
+      },
+    })
+    const registry = createGetApiKey()
+    const settings = createTestSettings()
+    const data = (await getRequestyConfig(registry, settings, envConfig)).data
+    const models = [createModel()]
+
+    updateModelsJson(data, models, settings, envConfig)
+
+    const written = await readModelsJsonFile(envConfig)
+    expect(Object.keys(written)).toEqual(['foo', 'bar', 'providers'])
   })
 
   it('creates parent directory if needed', async () => {

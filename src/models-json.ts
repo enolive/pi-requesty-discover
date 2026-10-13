@@ -23,9 +23,15 @@ const ProviderSchema = z
 
 const ModelsJsonSchema = z
   .object({
+    $schema: z.string().optional(),
     providers: z.record(z.string(), ProviderSchema),
   })
   .catchall(z.unknown())
+  .transform(({ $schema, providers, ...rest }) => ({
+    ...($schema !== undefined ? { $schema } : {}),
+    ...rest,
+    providers,
+  }))
 
 export type ModelsJson = z.infer<typeof ModelsJsonSchema>
 type ModelsJsonProvider = z.infer<typeof ProviderSchema>
