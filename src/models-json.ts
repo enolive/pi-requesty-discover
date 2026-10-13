@@ -1,4 +1,7 @@
 import type { ProviderConfig, ProviderModelConfig } from '@earendil-works/pi-coding-agent'
+
+// chat-only model shape; the package only exports the mixed chat/image/classifier union type
+export type ChatModelConfig = Extract<ProviderModelConfig, { type?: 'chat' }>
 import fs from 'node:fs'
 import path from 'node:path'
 import { z } from 'zod'
@@ -101,7 +104,7 @@ export function formatModelsDiffSummary(diff: ModelsDiff): string {
 
 export function updateModelsJson(
   data: ModelsJson,
-  models: ProviderModelConfig[],
+  models: ChatModelConfig[],
   settings: DiscoverySettings,
   envConfig = getEnv(),
 ): void {

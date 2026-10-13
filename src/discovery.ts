@@ -1,4 +1,4 @@
-import type { ProviderModelConfig } from '@earendil-works/pi-coding-agent'
+import type { ChatModelConfig } from './models-json'
 import { type Env } from './env'
 import {
   type GetApiKey,
@@ -38,7 +38,7 @@ export type DiscoveryEvaluation = {
   modelCount: number
   failedCount: number
   warningCount: number
-  passing: ProviderModelConfig[]
+  passing: ChatModelConfig[]
   diff: ModelsDiff
   healthCheckSummary: string
   logNote: string
@@ -73,7 +73,7 @@ export async function evaluateDiscovery(
   let diff: ModelsDiff
   let failedCount = 0
   let warningCount = 0
-  let passing: ProviderModelConfig[] = []
+  let passing: ChatModelConfig[] = []
   let logNote = ''
   let healthCheckSummary = ''
 

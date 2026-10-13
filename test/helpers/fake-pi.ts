@@ -30,6 +30,7 @@ export function createFakePi() {
 
   const on: ExtensionAPI['on'] = (event, handler) => {
     eventHandlers.set(event, handler as CapturedEventHandler)
+    return () => eventHandlers.delete(event)
   }
 
   const pi = {

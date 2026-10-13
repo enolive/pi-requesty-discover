@@ -1,4 +1,4 @@
-import type { ProviderModelConfig } from '@earendil-works/pi-coding-agent'
+import type { ChatModelConfig } from './models-json'
 import { describe, expect, it, vi } from 'vitest'
 import type { HealthCheckResult, Provider } from './health-check'
 import * as HealthCheckModule from './health-check'
@@ -25,7 +25,7 @@ type HealthCheckMode = 'off' | 'basic' | 'full'
 
 type MockScenario = {
   healthCheckMode?: HealthCheckMode
-  models?: ProviderModelConfig[]
+  models?: ChatModelConfig[]
   healthResults?: HealthCheckResult[]
   getRequestyConfigError?: unknown
   discoverModelsError?: unknown
@@ -555,7 +555,7 @@ function createSettings(overrides: Partial<DiscoverySettings> = {}): DiscoverySe
   }
 }
 
-function createModel(overrides: Partial<ProviderModelConfig> = {}): ProviderModelConfig {
+function createModel(overrides: Partial<ChatModelConfig> = {}): ChatModelConfig {
   return {
     id: 'requesty/model',
     name: 'Requesty Model',
