@@ -1,4 +1,4 @@
-import type { ProviderModelConfig } from '@earendil-works/pi-coding-agent'
+import type { ChatModelConfig } from './models-json'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -447,7 +447,7 @@ async function readModelsJsonFile(envConfig: Env): Promise<TestModelsJson> {
   return JSON.parse(content) as TestModelsJson
 }
 
-function createModel(overrides: Partial<ProviderModelConfig> = {}): ProviderModelConfig {
+function createModel(overrides: Partial<ChatModelConfig> = {}): ChatModelConfig {
   return {
     id: 'requesty/model',
     name: 'Requesty Model',

@@ -1,4 +1,4 @@
-import type { ProviderModelConfig } from '@earendil-works/pi-coding-agent'
+import type { ChatModelConfig } from './models-json'
 import fs from 'node:fs/promises'
 import { delay, http, HttpResponse } from 'msw'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -811,7 +811,7 @@ function normalizeHealthCheckLog(log: string): string {
   return log.replace(/^Timestamp: .+$/m, 'Timestamp: <timestamp>')
 }
 
-function createModel(overrides: Partial<ProviderModelConfig> = {}): ProviderModelConfig {
+function createModel(overrides: Partial<ChatModelConfig> = {}): ChatModelConfig {
   return {
     id: 'requesty/model',
     name: 'Requesty Model',

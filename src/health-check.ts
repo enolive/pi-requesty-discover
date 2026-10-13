@@ -1,4 +1,4 @@
-import type { ProviderModelConfig } from '@earendil-works/pi-coding-agent'
+import type { ChatModelConfig } from './models-json'
 import fs from 'node:fs'
 import path from 'node:path'
 import OpenAI from 'openai'
@@ -59,7 +59,7 @@ type ResolvedHealthCheckOptions = Required<Omit<HealthCheckOptions, 'onProgress'
 
 export async function checkModels(
   provider: Provider,
-  models: ProviderModelConfig[],
+  models: ChatModelConfig[],
   checkReasoning: boolean,
   options: HealthCheckOptions = {},
 ): Promise<HealthCheckResult[]> {
@@ -248,7 +248,7 @@ async function verifyFirstStreamChunk(
 
 async function checkModel(
   provider: Provider,
-  model: ProviderModelConfig,
+  model: ChatModelConfig,
   checkReasoning: boolean,
   options: ResolvedHealthCheckOptions,
 ): Promise<ModelCheckResult> {

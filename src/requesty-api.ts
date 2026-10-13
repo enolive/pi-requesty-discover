@@ -1,4 +1,4 @@
-import type { ProviderModelConfig } from '@earendil-works/pi-coding-agent'
+import type { ChatModelConfig } from './models-json'
 import { z } from 'zod'
 
 const DEFAULT_CONTEXT_WINDOW = 128000
@@ -34,7 +34,7 @@ type Provider = {
 export async function discoverModels(
   provider: Provider,
   options: { timeoutMs?: number } = {},
-): Promise<ProviderModelConfig[]> {
+): Promise<ChatModelConfig[]> {
   const timeoutMs = options.timeoutMs ?? 5_000
   const response = await fetch(`${provider.baseUrl}/models`, {
     headers: { Authorization: `Bearer ${provider.apiKey}` },
