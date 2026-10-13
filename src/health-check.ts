@@ -33,7 +33,15 @@ export type HealthCheckResult = {
   error?: string
 }
 
-type ModelCheckResult = Omit<HealthCheckResult, 'modelId'>
+type ModelCheckResult = Omit<HealthCheckResult, 'modelId'> & {
+  sawReasoning: boolean
+  /** First ~500 chars of concatenated reasoning deltas, when any were seen. */
+  reasoningText?: string
+  /** First ~200 chars of the model's answer. */
+  contentText?: string
+  /** Raw first stream deltas (prototype debugging aid). */
+  rawDeltas?: string[]
+}
 
 export type HealthCheckProgress = {
   completed: number
@@ -200,11 +208,12 @@ export async function postChatCompletion(
         error: isTimeout(err)
           ? `Timed out after ${attempts} attempt(s); per-attempt timeout is ${healthCheckOptions.timeoutMs / 1000}s`
           : formatRequestError(err),
+        sawReasoning: false,
       }
     }
   }
 
-  return { status: 'error', latencyMs: Date.now() - start, error: 'Unknown error' }
+  return { status: 'error', latencyMs: Date.now() - start, error: 'Unknown error', sawReasoning: false }
 }
 
 function isTimeout(err: unknown) {
@@ -238,12 +247,47 @@ async function verifyFirstStreamChunk(
   stream: Stream<OpenAI.Chat.Completions.ChatCompletionChunk>,
   start: number,
 ): Promise<ModelCheckResult> {
+  let sawReasoning = false
+  let reasoningText = ''
+  let contentText = ''
+  const rawDeltas: string[] = []
   for await (const chunk of stream) {
-    if (chunk.choices instanceof Array && chunk.choices.length > 0) {
-      return { status: 'ok', latencyMs: Date.now() - start }
+    const delta = chunk.choices?.[0]?.delta as Record<string, unknown> | undefined
+    if (rawDeltas.length < 10 && delta) {
+      rawDeltas.push(JSON.stringify(delta).slice(0, 300))
+    }
+    const reasoningChunk = [delta?.reasoning, delta?.reasoning_content].find(
+      (v): v is string => typeof v === 'string' && v.length > 0,
+    )
+    if (reasoningChunk) {
+      sawReasoning = true
+      reasoningText += reasoningChunk
+    }
+    if (typeof delta?.content === 'string') {
+      contentText += delta.content
+    }
+    if (chunk.choices?.[0]?.finish_reason) {
+      break
     }
   }
-  return { status: 'error', latencyMs: Date.now() - start, error: 'Stream ended without content' }
+  if (contentText.length === 0) {
+    return {
+      status: 'error',
+      latencyMs: Date.now() - start,
+      error: 'Stream ended without content',
+      sawReasoning,
+      reasoningText: sawReasoning ? reasoningText.replace(/\s+/g, ' ').slice(0, 500) : undefined,
+      rawDeltas: rawDeltas.length > 0 ? rawDeltas : undefined,
+    }
+  }
+  return {
+    status: 'ok',
+    latencyMs: Date.now() - start,
+    sawReasoning,
+    reasoningText: sawReasoning ? reasoningText.replace(/\s+/g, ' ').slice(0, 500) : undefined,
+    contentText: contentText.replace(/\s+/g, ' ').slice(0, 500),
+    rawDeltas: rawDeltas.length > 0 ? rawDeltas : undefined,
+  }
 }
 
 async function checkModel(
@@ -295,12 +339,14 @@ async function checkModel(
       status: 'error',
       latencyMs: reasoningResult.latencyMs,
       error: `Reasoning/tool check failed: ${reasoningResult.error}`,
+      sawReasoning: reasoningResult.sawReasoning,
     }
   }
 
   return {
     status: 'ok',
     latencyMs: basicResult.latencyMs + reasoningResult.latencyMs,
+    sawReasoning: basicResult.sawReasoning || reasoningResult.sawReasoning,
   }
 }
 

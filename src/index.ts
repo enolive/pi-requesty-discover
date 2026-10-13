@@ -13,9 +13,11 @@ import {
   getArgumentCompletions,
 } from './discovery'
 import { type DiscoverySettings, readDiscoverySettings } from './settings'
+import { checkThinkingModes, formatThinkingCheckReport, type ProbePromptType } from './thinking-check'
 import { runCatching, runCatchingAsync, type Try } from './utils'
 
 const COMMAND_NAME = 'requesty-discover'
+export const THINKING_CHECK_COMMAND_NAME = 'requesty-thinking-check'
 export const USAGE_STATUS_KEY = 'requesty-usage'
 
 // token suppresses stale writes when turns overlap
@@ -39,6 +41,22 @@ export default function (pi: ExtensionAPI) {
     getArgumentCompletions,
     handler: async (args, ctx) => {
       await runDiscoveryWorkflow(ctx, settings.value, env.value, args)
+    },
+  })
+
+  pi.registerCommand(THINKING_CHECK_COMMAND_NAME, {
+    description: 'Probe each pi thinking level of the current model against Requesty.',
+    getArgumentCompletions: (prefix: string) => {
+      const options = [
+        { label: 'base', value: 'base', description: 'simple prime question (default)' },
+        { label: 'troll', value: 'troll', description: 'Y-combinator bad-factorial trap' },
+      ]
+      if (!prefix) return options
+      return options.filter(o => o.value.toLowerCase().startsWith(prefix.toLowerCase()))
+    },
+    handler: async (args, ctx) => {
+      const promptType = (args.trim() || 'base') as ProbePromptType
+      await runThinkingCheck(ctx, settings.value, env.value, promptType)
     },
   })
 
@@ -141,6 +159,56 @@ async function updateUsageStatus(ctx: ExtensionContext, settings: DiscoverySetti
   } catch {
     // best-effort footer update: swallow fetch errors and stale-ctx throws (e.g. after /reload)
   }
+}
+
+/** Prototype: probe the thinking levels of the current model. */
+export async function runThinkingCheck(
+  ctx: ExtensionCommandContext,
+  settings: DiscoverySettings,
+  env: Env,
+  promptType: ProbePromptType = 'base',
+): Promise<void> {
+  const notify = (message: string) => {
+    if (ctx.hasUI) ctx.ui.notify(message, 'info')
+    else console.log(message)
+  }
+
+  const model = ctx.model
+  if (!model) {
+    notify('No model selected.')
+    return
+  }
+  if (model.provider !== settings.providerId) {
+    notify(`Current model is from provider "${model.provider}", not "${settings.providerId}". Skipping.`)
+    return
+  }
+  if (!model.reasoning) {
+    notify(`${model.id} does not support reasoning. There is nothing to probe.`)
+    return
+  }
+
+  if (promptType !== 'base' && promptType !== 'troll') {
+    notify(`Unknown probe type. Use "base" or "troll".`)
+    return
+  }
+
+  notify(
+    `Probing thinking levels of ${model.id} (${Object.keys(model.thinkingLevelMap ?? {}).length} mapped levels, ${promptType} prompt)...`,
+  )
+  const { provider } = await getRequestyConfig(createGetApiKey(ctx), settings, env)
+  const result = await checkThinkingModes(provider, model, promptType, progress => {
+    const extra = progress.error ? `: ${progress.error}` : ''
+    notify(`  ${progress.level} -> ${progress.mappedValue}: ${progress.status}${extra}`)
+    if (progress.reasoningText) {
+      notify(`    reasoning: ${progress.reasoningText}`)
+    }
+    if (!progress.sawReasoning && progress.rawDeltas) {
+      for (const raw of progress.rawDeltas.slice(0, 3)) {
+        notify(`    raw delta: ${raw}`)
+      }
+    }
+  })
+  notify(formatThinkingCheckReport(result))
 }
 
 export function formatUsageStatus(info: ApiKeyInfo): string {
