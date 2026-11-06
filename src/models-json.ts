@@ -14,13 +14,17 @@ const DEFAULT_NAME = 'Requesty'
 /** Resolves the API key for a provider through Pi's model registry. */
 export type GetApiKey = (providerId: string) => Promise<string | undefined>
 
+const ProviderModelSchema = z
+  .object({ id: z.string(), thinkingLevelMap: z.record(z.string(), z.unknown()).optional() })
+  .catchall(z.unknown())
+
 const ProviderSchema = z
   .object({
     name: z.string().optional(),
     baseUrl: z.string().optional(),
     apiKey: z.string().optional(),
     api: z.string().optional(),
-    models: z.array(z.object({ id: z.string() }).catchall(z.unknown())).optional(),
+    models: z.array(ProviderModelSchema).optional(),
   })
   .catchall(z.unknown())
 
@@ -38,6 +42,7 @@ const ModelsJsonSchema = z
 
 export type ModelsJson = z.infer<typeof ModelsJsonSchema>
 type ModelsJsonProvider = z.infer<typeof ProviderSchema>
+type ModelsJsonModel = z.infer<typeof ProviderModelSchema>
 
 export type RequestyProvider = ModelsJsonProvider & {
   name: string
@@ -102,6 +107,13 @@ export function formatModelsDiffSummary(diff: ModelsDiff): string {
   ].join('\n')
 }
 
+function thinkingLevelMap(model: ChatModelConfig, existingModelConfig: ModelsJsonModel | undefined) {
+  if (existingModelConfig?.thinkingLevelMap) {
+    return { thinkingLevelMap: existingModelConfig.thinkingLevelMap }
+  }
+  return model.thinkingLevelMap ? { thinkingLevelMap: model.thinkingLevelMap } : {}
+}
+
 export function updateModelsJson(
   data: ModelsJson,
   models: ChatModelConfig[],
@@ -116,16 +128,19 @@ export function updateModelsJson(
     api,
     apiKey,
     ...passthrough,
-    models: models.map(model => ({
-      id: model.id,
-      name: model.name,
-      reasoning: model.reasoning,
-      ...(model.thinkingLevelMap ? { thinkingLevelMap: model.thinkingLevelMap } : {}),
-      input: model.input,
-      cost: model.cost,
-      contextWindow: model.contextWindow,
-      maxTokens: model.maxTokens,
-    })),
+    models: models.map(model => {
+      const existingModelConfig = provider.models?.find(m => m.id === model.id)
+      return {
+        id: model.id,
+        name: model.name,
+        reasoning: model.reasoning,
+        ...thinkingLevelMap(model, existingModelConfig),
+        input: model.input,
+        cost: model.cost,
+        contextWindow: model.contextWindow,
+        maxTokens: model.maxTokens,
+      }
+    }),
   } satisfies ProviderConfig
 
   writeModelsJson(data, envConfig)

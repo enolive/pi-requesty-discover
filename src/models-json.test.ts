@@ -261,6 +261,30 @@ describe('updateModelsJson', () => {
     })
   })
 
+  it('preserves an already existing thinking level map', async () => {
+    const originalMap = { minimal: 'minimal', xhigh: 'xhigh' }
+    const envConfig = await createEnvWithModelsJson(tempDirectory, {
+      providers: {
+        [PROVIDER_ID]: {
+          apiKey: 'models-json-key',
+          models: [{ id: 'model-id', reasoning: true, thinkingLevelMap: originalMap }],
+        },
+      },
+    })
+    const settings = createTestSettings()
+    const getApiKey = createGetApiKey()
+    const data = (await getRequestyConfig(getApiKey, settings, envConfig)).data
+    const models = [createModel({ id: 'model-id', reasoning: true, thinkingLevelMap: { minimal: null } })]
+
+    updateModelsJson(data, models, settings, envConfig)
+
+    const written = await readModelsJsonFile(envConfig)
+    const model = (written.providers[PROVIDER_ID].models as Record<string, unknown>[])[0]
+    expect(model).toMatchObject({
+      thinkingLevelMap: originalMap,
+    })
+  })
+
   it('omits the thinking level map for models without one', async () => {
     const envConfig = await createEnvWithModelsJson(tempDirectory, {
       providers: { [PROVIDER_ID]: { apiKey: 'models-json-key', models: [] } },
