@@ -129,6 +129,7 @@ describe('discoverModels', () => {
         id: 'requesty/mapped-model',
         name: 'Mapped Model',
         reasoning: true,
+        thinkingLevelMap: { minimal: null },
         input: ['text', 'image'],
         cost: {
           input: 1,
@@ -140,6 +141,18 @@ describe('discoverModels', () => {
         maxTokens: 8192,
       },
     ])
+  })
+
+  it('does not add a thinking level map for non-reasoning models', async () => {
+    server.use(
+      http.get(modelsEndpoint, () => {
+        return modelsResponse([{ id: 'requesty/non-reasoning-model', supports_reasoning: false }])
+      }),
+    )
+
+    const models = await discoverModels(providerConfig)
+
+    expect(models[0]).not.toHaveProperty('thinkingLevelMap')
   })
 
   it('uses defaults for optional Requesty model fields', async () => {

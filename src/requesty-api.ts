@@ -56,6 +56,8 @@ export async function discoverModels(
       id: model.id,
       name: model.name && model.name.length > 0 ? model.name : model.id,
       reasoning: model.supports_reasoning === true,
+      // Requesty rejects the 'minimal' reasoning effort; null marks the level unsupported
+      ...(model.supports_reasoning === true ? { thinkingLevelMap: { minimal: null } } : {}),
       input: model.supports_vision === true ? ['text', 'image'] : ['text'],
       cost: {
         input: pricePerMillionTokens(model.input_price),

@@ -1,10 +1,10 @@
 import type { ChatModelConfig } from './models-json'
+import { diffModels, formatModelsDiffSummary, type GetApiKey, getRequestyConfig, updateModelsJson } from './models-json'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { Env } from './env'
 import { DEFAULT_PROVIDER_ID, type DiscoverySettings } from './settings'
-import { diffModels, formatModelsDiffSummary, type GetApiKey, getRequestyConfig, updateModelsJson } from './models-json'
 import { createTempDirectory, type TempDirectory } from '../test/helpers/temp-agent'
 
 const PROVIDER_ID = DEFAULT_PROVIDER_ID
@@ -243,7 +243,41 @@ describe('updateModelsJson', () => {
     expect(written).toMatchSnapshot()
   })
 
-  it('writes provider keys in a conventional order: name, baseUrl, api, apiKey before passthrough and models', async () => {
+  it('persists the thinking level map for reasoning models', async () => {
+    const envConfig = await createEnvWithModelsJson(tempDirectory, {
+      providers: { [PROVIDER_ID]: { apiKey: 'models-json-key', models: [] } },
+    })
+    const settings = createTestSettings()
+    const getApiKey = createGetApiKey()
+    const data = (await getRequestyConfig(getApiKey, settings, envConfig)).data
+    const models = [createModel({ reasoning: true, thinkingLevelMap: { minimal: null } })]
+
+    updateModelsJson(data, models, settings, envConfig)
+
+    const written = await readModelsJsonFile(envConfig)
+    const model = (written.providers[PROVIDER_ID].models as Record<string, unknown>[])[0]
+    expect(model).toMatchObject({
+      thinkingLevelMap: { minimal: null },
+    })
+  })
+
+  it('omits the thinking level map for models without one', async () => {
+    const envConfig = await createEnvWithModelsJson(tempDirectory, {
+      providers: { [PROVIDER_ID]: { apiKey: 'models-json-key', models: [] } },
+    })
+    const settings = createTestSettings()
+    const getApiKey = createGetApiKey()
+    const data = (await getRequestyConfig(getApiKey, settings, envConfig)).data
+    const models = [createModel()]
+
+    updateModelsJson(data, models, settings, envConfig)
+
+    const written = await readModelsJsonFile(envConfig)
+    const model = (written.providers[PROVIDER_ID].models as Record<string, unknown>[])[0]
+    expect(model).not.toHaveProperty('thinkingLevelMap')
+  })
+
+  it('preserves provider keys in a conventional order: name, baseUrl, api, apiKey before passthrough and models', async () => {
     const envConfig = await createEnvWithModelsJson(tempDirectory, {
       providers: {
         [PROVIDER_ID]: {

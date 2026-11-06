@@ -40,6 +40,9 @@ exports[`requesty-models-discover integration > syncs a passing Requesty model i
           "maxTokens": 32768,
           "name": "GPT 5.5",
           "reasoning": true,
+          "thinkingLevelMap": {
+            "minimal": null,
+          },
         },
       ],
       "name": "Requesty",

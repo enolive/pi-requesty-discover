@@ -120,6 +120,7 @@ export function updateModelsJson(
       id: model.id,
       name: model.name,
       reasoning: model.reasoning,
+      ...(model.thinkingLevelMap ? { thinkingLevelMap: model.thinkingLevelMap } : {}),
       input: model.input,
       cost: model.cost,
       contextWindow: model.contextWindow,
